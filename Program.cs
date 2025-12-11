@@ -104,9 +104,6 @@ class Program
 
                         string threadsResponseBody = await threadsResponse.Content.ReadAsStringAsync();
 
-                        // Log the JSON of all comments to a file
-                        await File.WriteAllTextAsync(commentsLogPath, threadsResponseBody);
-
                         var threads = JsonSerializer.Deserialize<ThreadResponse>(threadsResponseBody, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
                         // Track if any content is written for this PR
