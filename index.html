@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PR Comments Analyzer</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            max-width: 600px;
+            width: 90%;
+        }
+
+        h2 {
+            color: #333;
+            font-size: 28px;
+            margin: 0 0 20px 0;
+            font-weight: 600;
+            line-height: 1.4;
+        }
+
+        p {
+            color: #666;
+            font-size: 16px;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 14px 40px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-weight: 600;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            background: #999;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #666;
+            min-height: 20px;
+        }
+
+        .status.loading {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .status.success {
+            color: #28a745;
+            font-weight: 600;
+        }
+
+        .status.error {
+            color: #dc3545;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>ADO PRism</h2>
+        <p>Unlock your team's collective knowledge. Automatically extract key terms, solutions, and best practices from PR discussions using AI.</p>
+        <button id="fetchBtn" onclick="fetchComments()">Fetch Comments</button>
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        async function fetchComments() {
+            const button = document.getElementById('fetchBtn');
+            const status = document.getElementById('status');
+            
+            button.disabled = true;
+            status.textContent = 'Fetching comments...';
+            status.className = 'status loading';
+
+            try {
+                const response = await fetch('http://localhost:5000/api/fetch-comments', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    status.textContent = '✓ Comments fetched successfully! Check important_comments.md';
+                    status.className = 'status success';
+                } else {
+                    const error = await response.text();
+                    status.textContent = `✗ Error: ${error}`;
+                    status.className = 'status error';
+                }
+            } catch (error) {
+                status.textContent = `✗ Connection error: ${error.message}`;
+                status.className = 'status error';
+            } finally {
+                button.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

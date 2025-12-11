@@ -1,14 +1,32 @@
 ﻿using System.ClientModel;
 using System.Net.Http.Headers;
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Azure.AI.OpenAI;
 using OpenAI.Chat;
+using Azure.Identity;
 
 class Program
 {
     static async Task Main(string[] args)
+    {
+        // Start HTTP server in background
+        var server = new HttpListener();
+        server.Prefixes.Add("http://localhost:5000/");
+        server.Start();
+        Console.WriteLine("HTTP Server started on http://localhost:5000/");
+
+        // Handle requests in a background task
+        _ = Task.Run(async () => await HandleHttpRequests(server));
+
+        // Keep the application running
+        Console.WriteLine("Press any key to exit...");
+        Console.ReadKey();
+    }
+
+    static async Task RunApplication()
     {
         #region Azure OpenAI Setup
         // Azure OpenAI Client Setup
@@ -16,7 +34,11 @@ class Program
         var endpointUrl = "https://yimal-mfssuu7z-swedencentral.openai.azure.com/";
         var key = "";
 
-        var client = new AzureOpenAIClient(new Uri(endpointUrl), new ApiKeyCredential(key));
+        var client = new AzureOpenAIClient(
+            new Uri(endpointUrl), 
+            new DefaultAzureCredential()
+        );      
+
         var chatClient = client.GetChatClient(deploymentName);
         #endregion
 
@@ -25,11 +47,11 @@ class Program
         Console.WriteLine("Fetching Pull Request Comments...");
         string organization = "One";
         string repositoryName = "EngSys-MDA-AMCS";
-        string personalAccessToken = "RUHjcYTnTSbrMtB7FABRcaepXqQM8WwOp3PrU0J6yItRwuOgCaxgJQQJ99BIACAAAAAAArohAAASAZDO1dVY";
+        string personalAccessToken = "6YDTIVeyHGnRp03Gr3KDMGQF0KbK5TsG4UpmBZnoAyHDIlAe1fMoJQQJ99BLACAAAAAAArohAAASAZDO1fPo";
         string startDate = DateTime.UtcNow.AddDays(-30).ToString("yyyy-MM-ddTHH:mm:ssZ");
 
         // Azure DevOps API URL to fetch active PRs created in the last 30 days
-        string pullRequestsUrl = $"https://msazure.visualstudio.com/DefaultCollection/{organization}/_apis/git/repositories/{repositoryName}/pullRequests?searchCriteria.status=active&searchCriteria.creationDate={startDate}&api-version=7.1-preview.1";
+        string pullRequestsUrl = $"https://msazure.visualstudio.com/DefaultCollection/{organization}/_apis/git/repositories/{repositoryName}/pullRequests?searchCriteria.status=completed&searchCriteria.creationDate={startDate}&api-version=7.1-preview.1";
 
         // Fetch PR IDs dynamically
         List<int> pullRequestIds = await FetchPullRequestIdsAsync(pullRequestsUrl, personalAccessToken);
@@ -123,6 +145,74 @@ class Program
         #endregion
     }
 
+    static async Task HandleHttpRequests(HttpListener server)
+    {
+        while (server.IsListening)
+        {
+            try
+            {
+                HttpListenerContext context = await server.GetContextAsync();
+                HttpListenerRequest request = context.Request;
+                HttpListenerResponse response = context.Response;
+
+                if (request.HttpMethod == "POST" && request.Url.AbsolutePath == "/api/fetch-comments")
+                {
+                    // Run the application
+                    try
+                    {
+                        await RunApplication();
+                        response.StatusCode = 200;
+                        byte[] buffer = Encoding.UTF8.GetBytes("Comments fetched successfully");
+                        response.ContentLength64 = buffer.Length;
+                        await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                    }
+                    catch (Exception ex)
+                    {
+                        response.StatusCode = 500;
+                        byte[] buffer = Encoding.UTF8.GetBytes($"Error: {ex.Message}");
+                        response.ContentLength64 = buffer.Length;
+                        await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                    }
+                }
+                else if (request.Url.AbsolutePath == "/")
+                {
+                    // Serve index.html - look in project root (3 levels up from bin/Debug/net8.0)
+                    string indexPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "index.html");
+                    indexPath = Path.GetFullPath(indexPath);
+                    if (File.Exists(indexPath))
+                    {
+                        string html = File.ReadAllText(indexPath);
+                        response.ContentType = "text/html";
+                        response.StatusCode = 200;
+                        byte[] buffer = Encoding.UTF8.GetBytes(html);
+                        response.ContentLength64 = buffer.Length;
+                        await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                    }
+                    else
+                    {
+                        response.StatusCode = 404;
+                        byte[] buffer = Encoding.UTF8.GetBytes($"index.html not found at {indexPath}");
+                        response.ContentLength64 = buffer.Length;
+                        await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                    }
+                }
+                else
+                {
+                    response.StatusCode = 404;
+                    byte[] buffer = Encoding.UTF8.GetBytes("404 Not Found");
+                    response.ContentLength64 = buffer.Length;
+                    await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                }
+
+                response.Close();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error handling request: {ex.Message}");
+            }
+        }
+    }
+
     #region Helper Methods
     static async Task<List<int>> FetchPullRequestIdsAsync(string pullRequestsUrl, string personalAccessToken)
     {
@@ -141,7 +231,7 @@ class Program
             string responseBody = await response.Content.ReadAsStringAsync();
             var pullRequests = JsonSerializer.Deserialize<PullRequestResponse>(responseBody, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-            return pullRequests.Value.Select(pr => pr.PullRequestId).ToList();
+            return pullRequests?.Value?.Select(pr => pr.PullRequestId).ToList() ?? new List<int>();
         }
     }
 
