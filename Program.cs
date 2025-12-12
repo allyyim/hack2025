@@ -97,6 +97,9 @@ class Program
                     Console.WriteLine($"[PROGRESS API] Returning: {progressJson}");
                     response.ContentType = "application/json";
                     response.StatusCode = 200;
+                    response.Headers.Add("Cache-Control", "no-cache, no-store, must-revalidate");
+                    response.Headers.Add("Pragma", "no-cache");
+                    response.Headers.Add("Expires", "0");
                     byte[] buffer = Encoding.UTF8.GetBytes(progressJson);
                     response.ContentLength64 = buffer.Length;
                     await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
