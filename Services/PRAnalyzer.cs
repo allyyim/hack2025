@@ -71,8 +71,9 @@ public class PRAnalyzer
         Console.WriteLine("=====================================\n");
 
         // Reset and initialize progress tracking
-        Program.ProgressTracker.Reset();
-        Program.ProgressTracker.TotalPRs = pullRequestIds.Count;
+        ProgressTracker.Reset();
+        ProgressTracker.TotalPRs = pullRequestIds.Count;
+        Console.WriteLine($"[PROGRESS] Initialized: Total={ProgressTracker.TotalPRs}");
 
         // Process pull requests in batches
         int processedCount = 0;
@@ -91,13 +92,14 @@ public class PRAnalyzer
                 foreach (var prResult in results)
                 {
                     processedCount++;
-                    Program.ProgressTracker.ProcessedPRs = processedCount;
-                    Program.ProgressTracker.CurrentPR = prResult.PullRequestId;
+                    ProgressTracker.ProcessedPRs = processedCount;
+                    ProgressTracker.CurrentPR = prResult.PullRequestId;
+                    Console.WriteLine($"[PROGRESS] Updated: Processed={processedCount}, Current=#{prResult.PullRequestId}");
                     
                     if (prResult.HasContent)
                     {
                         foundCount++;
-                        Program.ProgressTracker.FoundPRs = foundCount;
+                        ProgressTracker.FoundPRs = foundCount;
                         markdownWriter.WriteLine(prResult.Content);
                         Console.WriteLine($"✓ [PR #{prResult.PullRequestId}] Found important comments ({foundCount} found / {processedCount} analyzed)");
                     }

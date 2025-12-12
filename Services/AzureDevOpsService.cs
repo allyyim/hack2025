@@ -20,8 +20,11 @@ public class AzureDevOpsService
 
     public async Task<List<int>> FetchPullRequestIdsAsync(int daysBack = 7, int maxResults = 15)
     {
+        // Use minTime instead of creationDate per Azure DevOps API docs
         string startDate = DateTime.UtcNow.AddDays(-daysBack).ToString("yyyy-MM-ddTHH:mm:ssZ");
-        string pullRequestsUrl = $"https://msazure.visualstudio.com/DefaultCollection/{_organization}/_apis/git/repositories/{_repositoryName}/pullRequests?searchCriteria.status=completed&searchCriteria.creationDate={startDate}&api-version=7.1-preview.1&$top={maxResults}";
+        string pullRequestsUrl = $"https://msazure.visualstudio.com/DefaultCollection/{_organization}/_apis/git/repositories/{_repositoryName}/pullRequests?searchCriteria.status=completed&searchCriteria.minTime={startDate}&api-version=7.1&$top={maxResults}";
+
+        Console.WriteLine($"[API] Fetching PRs from URL: {pullRequestsUrl}");
 
         using var httpClient = new HttpClient();
         var authToken = Convert.ToBase64String(Encoding.ASCII.GetBytes($":{_personalAccessToken}"));
@@ -30,14 +33,21 @@ public class AzureDevOpsService
         HttpResponseMessage response = await httpClient.GetAsync(pullRequestsUrl);
         if (!response.IsSuccessStatusCode)
         {
-            Console.WriteLine($"Error fetching pull requests: {response.StatusCode} - {response.ReasonPhrase}");
+            Console.WriteLine($"[API ERROR] Error fetching pull requests: {response.StatusCode} - {response.ReasonPhrase}");
+            string errorBody = await response.Content.ReadAsStringAsync();
+            Console.WriteLine($"[API ERROR] Response body: {errorBody}");
             return new List<int>();
         }
 
         string responseBody = await response.Content.ReadAsStringAsync();
+        Console.WriteLine($"[API] Response length: {responseBody.Length} characters");
+        
         var pullRequests = JsonSerializer.Deserialize<PullRequestResponse>(responseBody, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
-        return pullRequests?.Value?.Select(pr => pr.PullRequestId).ToList() ?? new List<int>();
+        
+        var prIds = pullRequests?.Value?.Select(pr => pr.PullRequestId).ToList() ?? new List<int>();
+        Console.WriteLine($"[API] Found {prIds.Count} PRs: {string.Join(", ", prIds.Take(10))}{(prIds.Count > 10 ? "..." : "")}");
+        
+        return prIds;
     }
 
     public async Task<ThreadResponse?> FetchPRThreadsAsync(int pullRequestId)

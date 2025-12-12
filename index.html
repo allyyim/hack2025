@@ -234,17 +234,24 @@
                     const progressResp = await fetch('/api/progress');
                     if (progressResp.ok) {
                         const progress = await progressResp.json();
+                        console.log('Progress update:', progress);
                         const progressBar = document.getElementById('progressBar');
                         const progressText = document.getElementById('progressText');
-                        if (progressBar && progressText) {
+                        if (progressBar && progressText && progress.total > 0) {
                             const percentage = Math.round((progress.processed / progress.total) * 100);
                             progressBar.style.width = `${percentage}%`;
                             progressBar.textContent = `${percentage}%`;
-                            progressText.textContent = `Analyzing PR #${progress.currentPR} (${progress.processed}/${progress.total} PRs, ${progress.found} with important comments)`;
+                            if (progress.currentPR > 0) {
+                                progressText.textContent = `Analyzing PR #${progress.currentPR} (${progress.processed}/${progress.total} PRs, ${progress.found} with important comments)`;
+                            } else {
+                                progressText.textContent = `Initializing... (${progress.processed}/${progress.total} PRs)`;
+                            }
                         }
+                    } else {
+                        console.warn('Progress endpoint returned:', progressResp.status);
                     }
                 } catch (e) {
-                    // Ignore progress polling errors
+                    console.error('Progress polling error:', e);
                 }
             }, 1000);
 

@@ -4,21 +4,21 @@ using System.Collections.Concurrent;
 using ADOPrism.Models;
 using ADOPrism.Services;
 
+// Progress tracking - must be public and outside Program class so PRAnalyzer can access it
+public static class ProgressTracker
+{
+    public static int TotalPRs { get; set; }
+    public static int ProcessedPRs { get; set; }
+    public static int FoundPRs { get; set; }
+    public static int CurrentPR { get; set; }
+    public static void Reset() { TotalPRs = 0; ProcessedPRs = 0; FoundPRs = 0; CurrentPR = 0; }
+}
+
 class Program
 {
     static readonly ConcurrentDictionary<string, List<HttpListenerResponse>> Subscribers = new();
     static DateTime LastFetchTime = DateTime.MinValue;
     static readonly object FetchLock = new object();
-    
-    // Progress tracking
-    public static class ProgressTracker
-    {
-        public static int TotalPRs { get; set; }
-        public static int ProcessedPRs { get; set; }
-        public static int FoundPRs { get; set; }
-        public static int CurrentPR { get; set; }
-        public static void Reset() { TotalPRs = 0; ProcessedPRs = 0; FoundPRs = 0; CurrentPR = 0; }
-    }
 
     static async Task Main(string[] args)
     {
@@ -94,6 +94,7 @@ class Program
                 {
                     // Return progress status as JSON
                     var progressJson = $"{{\"total\":{ProgressTracker.TotalPRs},\"processed\":{ProgressTracker.ProcessedPRs},\"found\":{ProgressTracker.FoundPRs},\"currentPR\":{ProgressTracker.CurrentPR}}}";
+                    Console.WriteLine($"[PROGRESS API] Returning: {progressJson}");
                     response.ContentType = "application/json";
                     response.StatusCode = 200;
                     byte[] buffer = Encoding.UTF8.GetBytes(progressJson);
