@@ -265,13 +265,14 @@
                                 progressBar.style.width = '100%';
                                 progressBar.textContent = '...';
                                 progressText.textContent = 'Fetching PRs from Azure DevOps...';
-                                console.log('Fetching phase active');
+                                console.log('[FRONTEND RENDER] Fetching phase active');
                             } else if (clientProgress.total > 0) {
                                 // Analyzing phase
                                 const percentage = Math.round((clientProgress.processed / clientProgress.total) * 100);
                                 // Set background-size for both gradients (colored stripe, gray stripe)
                                 progressBar.style.backgroundSize = `${percentage}%, 100%`;
                                 progressBar.textContent = `${clientProgress.processed}/${clientProgress.total}`;
+                                console.log(`[FRONTEND RENDER] Updated progressBar: ${clientProgress.processed}/${clientProgress.total} (${percentage}%) - backgroundSize: ${percentage}%`);
                                 
                                 // Update text immediately even if no PRs processed yet
                                 if (clientProgress.processed === 0) {
@@ -281,10 +282,11 @@
                                 } else {
                                     progressText.textContent = `Parsed ${clientProgress.processed} out of ${clientProgress.total} PRs • ${clientProgress.found} with important comments`;
                                 }
-                                console.log(`Progress: ${percentage}% (${clientProgress.processed}/${clientProgress.total})`);
                             } else {
-                                console.log('Waiting for progress data...', clientProgress);
+                                console.log('[FRONTEND RENDER] Waiting for progress data...', clientProgress);
                             }
+                        } else {
+                            console.error('[FRONTEND RENDER] Progress elements not found!', {progressBar, progressText});
                         }
                     } else {
                         console.warn('Progress endpoint returned:', progressResp.status);
@@ -328,12 +330,11 @@
                         // Insert the HTML content directly (it includes <details> tags)
                         content.innerHTML = bodyContent.innerHTML;
                         container.classList.add('visible');
-                        status.textContent = '✓ Comments loaded successfully!';
+                        // Keep status in success state with progress bar visible
                         status.className = 'status success';
                     } else {
                         content.innerHTML = html;
                         container.classList.add('visible');
-                        status.textContent = '✓ Comments loaded!';
                         status.className = 'status success';
                     }
                 } else {
