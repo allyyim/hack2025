@@ -251,7 +251,15 @@
                                 const newWidth = Math.max(1, percentage); // Always show at least 1%
                                 progressBar.style.width = `${newWidth}%`;
                                 progressBar.textContent = `${progress.processed}/${progress.total}`;
-                                progressText.textContent = `Parsed ${progress.processed} out of ${progress.total} PRs • ${progress.found} with important comments • Currently: PR #${progress.currentPR || 'N/A'}`;
+                                
+                                // Update text immediately even if no PRs processed yet
+                                if (progress.processed === 0) {
+                                    progressText.textContent = `Starting analysis of ${progress.total} PRs...`;
+                                } else if (progress.currentPR > 0) {
+                                    progressText.textContent = `Parsed ${progress.processed} out of ${progress.total} PRs • ${progress.found} with important comments • Currently: PR #${progress.currentPR}`;
+                                } else {
+                                    progressText.textContent = `Parsed ${progress.processed} out of ${progress.total} PRs • ${progress.found} with important comments`;
+                                }
                                 console.log(`Progress: ${percentage}% (${progress.processed}/${progress.total})`);
                             } else {
                                 console.log('Waiting for progress data...', progress);
