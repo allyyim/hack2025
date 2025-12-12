@@ -89,51 +89,38 @@ public class PRAnalyzer
         await Task.Delay(5000);
         Console.WriteLine($"[PROGRESS] Starting PR processing...");
 
-        // Process pull requests in batches
+        // Process pull requests ONE AT A TIME for smooth progress updates
         int processedCount = 0;
         int foundCount = 0;
 
-        foreach (var batch in pullRequestIds.Chunk(10))
+        using (StreamWriter markdownWriter = new StreamWriter(_outputPath, append: true))
         {
-            Console.WriteLine($"\n[BATCH] Processing PRs: {string.Join(", ", batch.Select(id => $"#{id}"))}");
-            
-            var batchTasks = batch.Select(prId => ProcessPRAsync(prId)).ToList();
-            var results = await Task.WhenAll(batchTasks);
-
-            // Write results and update progress after each PR with delay for UI to catch up
-            using (StreamWriter markdownWriter = new StreamWriter(_outputPath, append: true))
+            foreach (var prId in pullRequestIds)
             {
-                foreach (var prResult in results)
+                // Process single PR
+                var prResult = await ProcessPRAsync(prId);
+                
+                processedCount++;
+                ProgressTracker.ProcessedPRs = processedCount;
+                ProgressTracker.CurrentPR = prResult.PullRequestId;
+                
+                if (prResult.HasContent)
                 {
-                    processedCount++;
-                    ProgressTracker.ProcessedPRs = processedCount;
-                    ProgressTracker.CurrentPR = prResult.PullRequestId;
-                    
-                    if (prResult.HasContent)
-                    {
-                        foundCount++;
-                        ProgressTracker.FoundPRs = foundCount;
-                        markdownWriter.WriteLine(prResult.Content);
-                        Console.WriteLine($"✓ [PR #{prResult.PullRequestId}] Found important comments ({foundCount} found / {processedCount} analyzed) [PROGRESS: {processedCount}/{ProgressTracker.TotalPRs}]");
-                    }
-                    else if (prResult.PullRequestId > 0)
-                    {
-                        Console.WriteLine($"⊘ [PR #{prResult.PullRequestId}] No important comments ({foundCount} found / {processedCount} analyzed) [PROGRESS: {processedCount}/{ProgressTracker.TotalPRs}]");
-                    }
-                    
-                    // Log progress update explicitly
-                    Console.WriteLine($"[PROGRESS UPDATE] Backend now at: {processedCount}/{ProgressTracker.TotalPRs} PRs (Found: {foundCount})");
-                    
-                    // Delay after each PR so frontend can poll and see smooth progress
-                    await Task.Delay(2000);
+                    foundCount++;
+                    ProgressTracker.FoundPRs = foundCount;
+                    markdownWriter.WriteLine(prResult.Content);
+                    Console.WriteLine($"✓ [PR #{prResult.PullRequestId}] Found important comments ({foundCount} found / {processedCount} analyzed) [PROGRESS: {processedCount}/{ProgressTracker.TotalPRs}]");
                 }
-            }
-
-            // Small delay between batches
-            if (processedCount < pullRequestIds.Count)
-            {
-                Console.WriteLine($"\n[PROGRESS] {processedCount}/{pullRequestIds.Count} PRs analyzed, waiting 5 seconds before next batch...\n");
-                await Task.Delay(TimeSpan.FromSeconds(5));
+                else if (prResult.PullRequestId > 0)
+                {
+                    Console.WriteLine($"⊘ [PR #{prResult.PullRequestId}] No important comments ({foundCount} found / {processedCount} analyzed) [PROGRESS: {processedCount}/{ProgressTracker.TotalPRs}]");
+                }
+                
+                // Log progress update explicitly
+                Console.WriteLine($"[PROGRESS UPDATE] Backend now at: {processedCount}/{ProgressTracker.TotalPRs} PRs (Found: {foundCount})");
+                
+                // Delay after each PR so frontend can poll and see the update
+                await Task.Delay(1500);
             }
         }
 
