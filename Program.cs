@@ -395,9 +395,8 @@ class Program
                 }
                 else if (request.Url.AbsolutePath == "/")
                 {
-                    // Serve index.html - look in project root (3 levels up from bin/Debug/net8.0)
-                    string indexPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "index.html");
-                    indexPath = Path.GetFullPath(indexPath);
+                    // Serve index.html - in Azure it's in the same directory as the DLL
+                    string indexPath = Path.Combine(AppContext.BaseDirectory, "index.html");
                     if (File.Exists(indexPath))
                     {
                         string html = File.ReadAllText(indexPath);
@@ -417,9 +416,8 @@ class Program
                 }
                     else if (request.HttpMethod == "GET" && request.Url.AbsolutePath == "/important-comments")
                     {
-                        // Serve the important_comments.md from project root (3 levels up)
-                        string mdPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "important_comments.md");
-                        mdPath = Path.GetFullPath(mdPath);
+                        // Serve the important_comments.md from the same directory
+                        string mdPath = Path.Combine(AppContext.BaseDirectory, "important_comments.md");
                         response.ContentType = "text/html";
 
                         // Only fetch if we haven't fetched in the last 5 minutes (debounce)
