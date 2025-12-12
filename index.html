@@ -244,40 +244,47 @@
             status.className = 'status loading';
             console.log('Progress bar initialized');
 
+            // Immediately reset progress to 0 on the client side
+            let clientProgress = { total: 50, processed: 0, found: 0, currentPR: 0 };
+
             // Poll for progress updates
             const progressInterval = setInterval(async () => {
                 try {
-                    const progressResp = await fetch('/api/progress');
+                    const progressResp = await fetch('/api/progress?' + Date.now());
                     if (progressResp.ok) {
                         const progress = await progressResp.json();
-                        console.log('Progress update:', progress);
+                        // Only update if we get real progress (not stale data)
+                        if (progress.total > 0 && progress.processed <= progress.total) {
+                            clientProgress = progress;
+                        }
+                        console.log('Progress update:', clientProgress);
                         const progressBar = document.getElementById('progressBar');
                         const progressText = document.getElementById('progressText');
                         if (progressBar && progressText) {
-                            if (progress.total === -1) {
+                            if (clientProgress.total === -1) {
                                 // Fetching PRs phase
                                 progressBar.style.width = '100%';
                                 progressBar.textContent = '...';
                                 progressText.textContent = 'Fetching PRs from Azure DevOps...';
                                 console.log('Fetching phase active');
-                            } else if (progress.total > 0) {
+                            } else if (clientProgress.total > 0) {
                                 // Analyzing phase
-                                const percentage = Math.round((progress.processed / progress.total) * 100);
+                                const percentage = Math.round((clientProgress.processed / clientProgress.total) * 100);
                                 // Set background-size for both gradients (colored stripe, gray stripe)
                                 progressBar.style.backgroundSize = `${percentage}%, 100%`;
-                                progressBar.textContent = `${progress.processed}/${progress.total}`;
+                                progressBar.textContent = `${clientProgress.processed}/${clientProgress.total}`;
                                 
                                 // Update text immediately even if no PRs processed yet
-                                if (progress.processed === 0) {
-                                    progressText.textContent = `Starting analysis of ${progress.total} PRs...`;
-                                } else if (progress.currentPR > 0) {
-                                    progressText.textContent = `Parsed ${progress.processed} out of ${progress.total} PRs • ${progress.found} with important comments • Currently: PR #${progress.currentPR}`;
+                                if (clientProgress.processed === 0) {
+                                    progressText.textContent = `Starting analysis of ${clientProgress.total} PRs...`;
+                                } else if (clientProgress.currentPR > 0) {
+                                    progressText.textContent = `Parsed ${clientProgress.processed} out of ${clientProgress.total} PRs • ${clientProgress.found} with important comments • Currently: PR #${clientProgress.currentPR}`;
                                 } else {
-                                    progressText.textContent = `Parsed ${progress.processed} out of ${progress.total} PRs • ${progress.found} with important comments`;
+                                    progressText.textContent = `Parsed ${clientProgress.processed} out of ${clientProgress.total} PRs • ${clientProgress.found} with important comments`;
                                 }
-                                console.log(`Progress: ${percentage}% (${progress.processed}/${progress.total})`);
+                                console.log(`Progress: ${percentage}% (${clientProgress.processed}/${clientProgress.total})`);
                             } else {
-                                console.log('Waiting for progress data...', progress);
+                                console.log('Waiting for progress data...', clientProgress);
                             }
                         }
                     } else {
