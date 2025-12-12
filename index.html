@@ -236,8 +236,8 @@
             status.innerHTML = `
                 <div id="progressContainer" style="display:flex;flex-direction:column;gap:10px;width:100%;">
                     <span class="loading-spinner"></span>
-                    <div style="font-weight:500;">Analyzing up to 50 PRs from the last 30 days...</div>
-                    <div class="progress-3" id="progressBar">0/50</div>
+                    <div style="font-weight:500;">Analyzing up to 25 PRs from the last 30 days...</div>
+                    <div class="progress-3" id="progressBar">0/25</div>
                     <div id="progressText" style="font-size:14px;color:#666;font-weight:500;">Preparing to analyze PRs...</div>
                 </div>
             `;
@@ -245,7 +245,7 @@
             console.log('Progress bar initialized');
 
             // Immediately reset progress to 0 on the client side
-            let clientProgress = { total: 50, processed: 0, found: 0, currentPR: 0 };
+            let clientProgress = { total: 25, processed: 0, found: 0, currentPR: 0 };
 
             // Poll for progress updates
             const progressInterval = setInterval(async () => {
@@ -310,7 +310,7 @@
                 const spinner = document.querySelector('.loading-spinner');
                 if (progressBar && progressText) {
                     progressBar.style.backgroundSize = '100%, 100%';
-                    progressBar.textContent = '50/50';
+                    progressBar.textContent = '25/25';
                     progressText.textContent = '✓ Analysis complete! View important comments below.';
                     progressText.style.color = '#28a745';
                     progressText.style.fontWeight = 'bold';
