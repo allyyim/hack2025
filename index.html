@@ -268,6 +268,27 @@
             try {
                 // Use relative URL so it works both locally and on Azure
                 const response = await fetch('/important-comments');
+                
+                // Get final progress before clearing interval
+                try {
+                    const finalProgressResp = await fetch('/api/progress');
+                    if (finalProgressResp.ok) {
+                        const finalProgress = await finalProgressResp.json();
+                        const progressBar = document.getElementById('progressBar');
+                        const progressText = document.getElementById('progressText');
+                        if (progressBar && progressText && finalProgress.total > 0) {
+                            progressBar.style.width = '100%';
+                            progressBar.textContent = `${finalProgress.processed}/${finalProgress.total}`;
+                            progressText.textContent = `✓ Completed! Parsed ${finalProgress.processed} PRs • ${finalProgress.found} with important comments`;
+                            console.log('Final progress:', finalProgress);
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error fetching final progress:', e);
+                }
+                
+                // Wait a moment to show final progress
+                await new Promise(resolve => setTimeout(resolve, 1500));
                 clearInterval(progressInterval);
 
                 if (response.ok) {
