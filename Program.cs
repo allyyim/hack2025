@@ -94,7 +94,8 @@ class Program
                 {
                     // Return progress status as JSON
                     var progressJson = $"{{\"total\":{ProgressTracker.TotalPRs},\"processed\":{ProgressTracker.ProcessedPRs},\"found\":{ProgressTracker.FoundPRs},\"currentPR\":{ProgressTracker.CurrentPR}}}";
-                    Console.WriteLine($"[PROGRESS API] Returning: {progressJson}");
+                    // Log every progress request to track frontend polling
+                    Console.WriteLine($"[PROGRESS API] Client polled - Returning: Total={ProgressTracker.TotalPRs}, Processed={ProgressTracker.ProcessedPRs}, Found={ProgressTracker.FoundPRs}, Current=#{ProgressTracker.CurrentPR}");
                     response.ContentType = "application/json";
                     response.StatusCode = 200;
                     response.Headers.Add("Cache-Control", "no-cache, no-store, must-revalidate");
@@ -163,9 +164,6 @@ class Program
                                 shouldFetch = true;
                             }
                         }
-
-                        // Always reset progress when endpoint is hit (even if using cached results)
-                        ProgressTracker.Reset();
                         
                         if (shouldFetch)
                         {

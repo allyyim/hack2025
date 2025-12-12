@@ -253,11 +253,14 @@
                     const progressResp = await fetch('/api/progress?' + Date.now());
                     if (progressResp.ok) {
                         const progress = await progressResp.json();
+                        console.log('[FRONTEND POLL] Received from server:', progress);
                         // Only update if we get real progress (not stale data)
                         if (progress.total > 0 && progress.processed <= progress.total) {
                             clientProgress = progress;
+                            console.log('[FRONTEND UPDATE] Updated clientProgress to:', clientProgress);
+                        } else {
+                            console.log('[FRONTEND] Keeping previous clientProgress (server sent invalid data):', clientProgress);
                         }
-                        console.log('Progress update:', clientProgress);
                         const progressBar = document.getElementById('progressBar');
                         const progressText = document.getElementById('progressText');
                         if (progressBar && progressText) {
@@ -300,11 +303,22 @@
                 // Add timestamp to force fresh analysis
                 const response = await fetch(`/important-comments?force=true&t=${Date.now()}`);
                 
-                // Clear interval and hide progress
+                // Clear interval and keep progress bar visible
                 clearInterval(progressInterval);
-                const progressContainer = document.getElementById('progressContainer');
-                if (progressContainer) {
-                    progressContainer.style.display = 'none';
+                
+                // Update progress bar to show completion
+                const progressBar = document.getElementById('progressBar');
+                const progressText = document.getElementById('progressText');
+                const spinner = document.querySelector('.loading-spinner');
+                if (progressBar && progressText) {
+                    progressBar.style.backgroundSize = '100%, 100%';
+                    progressBar.textContent = '50/50';
+                    progressText.textContent = '✓ Analysis complete! View important comments below.';
+                    progressText.style.color = '#28a745';
+                    progressText.style.fontWeight = 'bold';
+                }
+                if (spinner) {
+                    spinner.style.display = 'none';
                 }
 
                 if (response.ok) {

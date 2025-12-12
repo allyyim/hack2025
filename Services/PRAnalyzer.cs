@@ -56,8 +56,13 @@ public class PRAnalyzer
 
         // Reset progress and indicate fetching phase
         ProgressTracker.Reset();
+        Console.WriteLine($"[PROGRESS] Reset complete. Starting fetch phase...");
+        
+        // Small delay to ensure client catches 0/0 state
+        await Task.Delay(500);
+        
         ProgressTracker.TotalPRs = -1; // -1 indicates fetching in progress
-        Console.WriteLine($"[PROGRESS] Starting fetch phase...");
+        Console.WriteLine($"[PROGRESS] TotalPRs set to -1 (fetching)...");
 
         // Fetch PR IDs
         var pullRequestIds = await _adoService.FetchPullRequestIdsAsync(daysBack, maxPRs);
@@ -77,10 +82,12 @@ public class PRAnalyzer
 
         // Initialize progress tracking with actual count
         ProgressTracker.TotalPRs = pullRequestIds.Count;
-        Console.WriteLine($"[PROGRESS] Initialized: Total={ProgressTracker.TotalPRs}");
+        ProgressTracker.ProcessedPRs = 0;
+        Console.WriteLine($"[PROGRESS] Initialized: Total={ProgressTracker.TotalPRs}, Processed=0");
         
-        // Wait 1 second to ensure UI polling catches the initial 0/50 state
-        await Task.Delay(1000);
+        // Wait 2 seconds to ensure UI polling catches the initial 0/50 state
+        await Task.Delay(2000);
+        Console.WriteLine($"[PROGRESS] Starting PR processing...");
 
         // Process pull requests in batches
         int processedCount = 0;
@@ -93,7 +100,7 @@ public class PRAnalyzer
             var batchTasks = batch.Select(prId => ProcessPRAsync(prId)).ToList();
             var results = await Task.WhenAll(batchTasks);
 
-            // Write results
+            // Write results and update progress after each PR
             using (StreamWriter markdownWriter = new StreamWriter(_outputPath, append: true))
             {
                 foreach (var prResult in results)
@@ -101,19 +108,21 @@ public class PRAnalyzer
                     processedCount++;
                     ProgressTracker.ProcessedPRs = processedCount;
                     ProgressTracker.CurrentPR = prResult.PullRequestId;
-                    Console.WriteLine($"[PROGRESS] Updated: Processed={processedCount}, Current=#{prResult.PullRequestId}");
                     
                     if (prResult.HasContent)
                     {
                         foundCount++;
                         ProgressTracker.FoundPRs = foundCount;
                         markdownWriter.WriteLine(prResult.Content);
-                        Console.WriteLine($"✓ [PR #{prResult.PullRequestId}] Found important comments ({foundCount} found / {processedCount} analyzed)");
+                        Console.WriteLine($"✓ [PR #{prResult.PullRequestId}] Found important comments ({foundCount} found / {processedCount} analyzed) [PROGRESS: {processedCount}/{ProgressTracker.TotalPRs}]");
                     }
                     else if (prResult.PullRequestId > 0)
                     {
-                        Console.WriteLine($"⊘ [PR #{prResult.PullRequestId}] No important comments ({foundCount} found / {processedCount} analyzed)");
+                        Console.WriteLine($"⊘ [PR #{prResult.PullRequestId}] No important comments ({foundCount} found / {processedCount} analyzed) [PROGRESS: {processedCount}/{ProgressTracker.TotalPRs}]");
                     }
+                    
+                    // Log progress update explicitly
+                    Console.WriteLine($"[PROGRESS UPDATE] Backend now at: {processedCount}/{ProgressTracker.TotalPRs} PRs (Found: {foundCount})");
                 }
             }
 
