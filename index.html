@@ -221,9 +221,9 @@
                     <span class="loading-spinner"></span>
                     <div style="font-weight:500;">Analyzing up to 50 PRs from the last 30 days...</div>
                     <div style="width:100%;background:#e0e0e0;border-radius:10px;height:20px;overflow:hidden;">
-                        <div id="progressBar" style="width:0%;background:linear-gradient(90deg,#667eea,#764ba2);height:100%;transition:width 0.3s;display:flex;align-items:center;justify-content:center;color:white;font-size:12px;font-weight:bold;"></div>
+                        <div id="progressBar" style="width:0%;background:linear-gradient(90deg,#ff0000,#ff7f00,#ffff00,#00ff00,#0000ff,#4b0082,#9400d3);height:100%;transition:width 0.3s;display:flex;align-items:center;justify-content:center;color:white;font-size:12px;font-weight:bold;text-shadow:1px 1px 2px rgba(0,0,0,0.5);"></div>
                     </div>
-                    <div id="progressText" style="font-size:14px;color:#666;">Starting analysis...</div>
+                    <div id="progressText" style="font-size:14px;color:#666;">Preparing to analyze PRs...</div>
                 </div>
             `;
             status.className = 'status loading';
@@ -248,11 +248,7 @@
                                 const percentage = Math.round((progress.processed / progress.total) * 100);
                                 progressBar.style.width = `${percentage}%`;
                                 progressBar.textContent = `${percentage}%`;
-                                if (progress.currentPR > 0) {
-                                    progressText.textContent = `Analyzing PR #${progress.currentPR} (${progress.processed}/${progress.total} PRs, ${progress.found} with important comments)`;
-                                } else {
-                                    progressText.textContent = `Initializing... (${progress.processed}/${progress.total} PRs)`;
-                                }
+                                progressText.textContent = `${progress.processed} PRs analyzed • ${progress.found} with important comments • Currently analyzing PR #${progress.currentPR || 'N/A'}`;
                             }
                         }
                     } else {
