@@ -147,11 +147,11 @@ class Program
                         string mdPath = Path.Combine(AppContext.BaseDirectory, "important_comments.md");
                         response.ContentType = "text/html";
 
-                        // Only fetch if we haven't fetched in the last 5 minutes (debounce)
+                        // Only fetch if we haven't fetched in the last 30 seconds (debounce)
                         bool shouldFetch = false;
                         lock (FetchLock)
                         {
-                            if (DateTime.UtcNow.Subtract(LastFetchTime).TotalMinutes >= 5)
+                            if (DateTime.UtcNow.Subtract(LastFetchTime).TotalSeconds >= 30)
                             {
                                 LastFetchTime = DateTime.UtcNow;
                                 shouldFetch = true;
@@ -160,6 +160,9 @@ class Program
 
                         if (shouldFetch)
                         {
+                            // Reset progress tracker
+                            ProgressTracker.Reset();
+                            
                             // Delete old file to ensure fresh data
                             if (File.Exists(mdPath))
                             {
