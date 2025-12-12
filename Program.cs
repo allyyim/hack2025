@@ -151,10 +151,13 @@ class Program
                         response.ContentType = "text/html";
 
                         // Only fetch if we haven't fetched in the last 30 seconds (debounce)
+                        // OR if force=true query parameter is present
                         bool shouldFetch = false;
+                        bool forceRefresh = request.QueryString["force"] == "true";
+                        
                         lock (FetchLock)
                         {
-                            if (DateTime.UtcNow.Subtract(LastFetchTime).TotalSeconds >= 30)
+                            if (forceRefresh || DateTime.UtcNow.Subtract(LastFetchTime).TotalSeconds >= 30)
                             {
                                 LastFetchTime = DateTime.UtcNow;
                                 shouldFetch = true;
