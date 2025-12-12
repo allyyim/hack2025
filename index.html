@@ -133,7 +133,6 @@
             background:
                 repeating-linear-gradient(135deg, #f03355 0 10px, #ffa516 0 20px) 0/0% no-repeat,
                 repeating-linear-gradient(135deg, #ddd 0 10px, #eee 0 20px) 0/100%;
-            animation: p3 2s infinite;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -141,9 +140,7 @@
             font-size: 12px;
             font-weight: bold;
             text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
-        }
-        @keyframes p3 {
-            100% { background-size: 100%; }
+            transition: background-size 0.3s ease;
         }
     </style>
 </head>
