@@ -66,7 +66,9 @@ public class PRAnalyzer
         // Initialize output file
         InitializeOutputFile(daysBack);
 
-        Console.WriteLine($"Processing {pullRequestIds.Count} PRs...");
+        Console.WriteLine($"===== Found {pullRequestIds.Count} PRs to analyze =====");
+        Console.WriteLine($"PR IDs: {string.Join(", ", pullRequestIds.Select(id => $"#{id}"))}");
+        Console.WriteLine("=====================================\n");
 
         // Process pull requests in batches
         int processedCount = 0;
@@ -74,6 +76,8 @@ public class PRAnalyzer
 
         foreach (var batch in pullRequestIds.Chunk(10))
         {
+            Console.WriteLine($"\n[BATCH] Processing PRs: {string.Join(", ", batch.Select(id => $"#{id}"))}");
+            
             var batchTasks = batch.Select(prId => ProcessPRAsync(prId)).ToList();
             var results = await Task.WhenAll(batchTasks);
 
@@ -87,11 +91,11 @@ public class PRAnalyzer
                     {
                         foundCount++;
                         markdownWriter.WriteLine(prResult.Content);
-                        Console.WriteLine($"✓ Found important comments in PR #{prResult.PullRequestId} ({foundCount} of {processedCount} PRs)");
+                        Console.WriteLine($"✓ [PR #{prResult.PullRequestId}] Found important comments ({foundCount} found / {processedCount} analyzed)");
                     }
                     else if (prResult.PullRequestId > 0)
                     {
-                        Console.WriteLine($"⊘ No important comments in PR #{prResult.PullRequestId} ({foundCount} of {processedCount} PRs)");
+                        Console.WriteLine($"⊘ [PR #{prResult.PullRequestId}] No important comments ({foundCount} found / {processedCount} analyzed)");
                     }
                 }
             }
@@ -99,7 +103,7 @@ public class PRAnalyzer
             // Small delay between batches
             if (processedCount < pullRequestIds.Count)
             {
-                Console.WriteLine($"Processed {processedCount}/{pullRequestIds.Count} PRs, waiting 5 seconds...");
+                Console.WriteLine($"\n[PROGRESS] {processedCount}/{pullRequestIds.Count} PRs analyzed, waiting 5 seconds before next batch...\n");
                 await Task.Delay(TimeSpan.FromSeconds(5));
             }
         }
@@ -123,22 +127,25 @@ public class PRAnalyzer
 
         try
         {
-            Console.WriteLine($"Fetching threads for PR #{pullRequestId}");
+            Console.WriteLine($"  → [PR #{pullRequestId}] Fetching threads...");
 
             var threads = await _adoService.FetchPRThreadsAsync(pullRequestId);
 
             if (threads?.Value == null || threads.Value.Length == 0)
             {
+                Console.WriteLine($"  → [PR #{pullRequestId}] No threads found");
                 Console.WriteLine($"No threads in PR #{pullRequestId}");
                 return new PRProcessResult { PullRequestId = pullRequestId, HasContent = false };
             }
 
             // Process all comments in parallel
             var commentTasks = new List<Task<string>>();
+            int totalComments = 0;
             foreach (CommentThread thread in threads.Value)
             {
                 foreach (var comment in thread.Comments)
                 {
+                    totalComments++;
                     if (CommentProcessor.ShouldProcessComment(comment.Content ?? ""))
                     {
                         commentTasks.Add(_commentProcessor.ProcessCommentAsync(comment, thread, prLink));
@@ -146,6 +153,8 @@ public class PRAnalyzer
                 }
             }
 
+            Console.WriteLine($"  → [PR #{pullRequestId}] Analyzing {commentTasks.Count} comments (out of {totalComments} total)...");
+            
             var commentResults = await Task.WhenAll(commentTasks);
             var markdownContent = string.Concat(commentResults.Where(c => !string.IsNullOrEmpty(c)));
 

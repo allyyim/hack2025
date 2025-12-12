@@ -77,10 +77,12 @@ public class CommentProcessor
         // Parse the AI response
         var aiResponse = response.Value.Content.Last().Text;
 
-        // Filter out non-important content
-        if (aiResponse.Contains("No important content", StringComparison.OrdinalIgnoreCase) ||
-            aiResponse.Contains("No definition found", StringComparison.OrdinalIgnoreCase))
+        Console.WriteLine($"[DEBUG] AI Response for Thread {thread.Id}, Comment {comment.Id}: {aiResponse.Substring(0, Math.Min(200, aiResponse.Length))}...");
+
+        // Filter out non-important content - only if explicitly stated
+        if (aiResponse.Contains("No important content", StringComparison.OrdinalIgnoreCase))
         {
+            Console.WriteLine($"[FILTERED] No important content - Thread {thread.Id}, Comment {comment.Id}");
             return string.Empty;
         }
 
@@ -89,19 +91,24 @@ public class CommentProcessor
         string summary = ExtractField(aiResponse, "Summary");
         string details = ExtractField(aiResponse, "Details");
 
-        // Skip if no meaningful content
-        if (string.IsNullOrEmpty(summary) || summary.Contains("Unknown", StringComparison.OrdinalIgnoreCase))
+        Console.WriteLine($"[EXTRACTED] Category: '{category}', Summary: '{summary}'");
+
+        // Skip if no meaningful content extracted
+        if (string.IsNullOrEmpty(summary))
         {
+            Console.WriteLine($"[FILTERED] Empty summary - Thread {thread.Id}, Comment {comment.Id}");
             return string.Empty;
         }
 
-        // Filter out git/PR meta comments
-        var filterTerms = new[] { "vote", "Branch", "Git", "PR description", "PR Assistant", "refs/", "PRAssistant" };
+        // Filter out git/PR meta comments - only if directly about these topics
+        var filterTerms = new[] { "PR description", "PR Assistant", "PRAssistant" };
         if (filterTerms.Any(f => summary.Contains(f, StringComparison.OrdinalIgnoreCase)))
         {
+            Console.WriteLine($"[FILTERED] Meta comment - Thread {thread.Id}, Comment {comment.Id}");
             return string.Empty;
         }
 
+        Console.WriteLine($"[INCLUDED] Adding to output - Thread {thread.Id}, Comment {comment.Id}");
         // Build markdown output
         return BuildMarkdownOutput(thread.Id, comment.Id, category, summary, details);
     }
@@ -133,7 +140,21 @@ public class CommentProcessor
 
     private static string ExtractField(string aiResponse, string fieldName)
     {
-        var match = Regex.Match(aiResponse, $@"{fieldName}:\s*(.*?)(?=\n[A-Z][a-z]+:|$)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
-        return match.Success ? match.Groups[1].Value.Trim() : string.Empty;
+        // Try multiple patterns to extract fields
+        // Pattern 1: Standard "Field: value" until next field or end
+        var match = Regex.Match(aiResponse, $@"{fieldName}:\s*(.*?)(?=\n\w+:|$)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        if (match.Success && !string.IsNullOrWhiteSpace(match.Groups[1].Value))
+        {
+            return match.Groups[1].Value.Trim();
+        }
+
+        // Pattern 2: With markdown bold **Field:**
+        match = Regex.Match(aiResponse, $@"\*\*{fieldName}:\*\*\s*(.*?)(?=\n|$)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        if (match.Success && !string.IsNullOrWhiteSpace(match.Groups[1].Value))
+        {
+            return match.Groups[1].Value.Trim();
+        }
+
+        return string.Empty;
     }
 }
