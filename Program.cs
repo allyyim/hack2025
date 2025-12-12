@@ -36,16 +36,37 @@ class Program
     {
         // Start HTTP server in background
         var server = new HttpListener();
-        server.Prefixes.Add("http://localhost:5000/");
+        
+        // Azure App Service requires binding to port from PORT env var (default 8080)
+        // Local dev uses 5000
+        string port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
+        bool isAzure = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME"));
+        
+        if (isAzure)
+        {
+            server.Prefixes.Add($"http://+:{port}/");
+        }
+        else
+        {
+            server.Prefixes.Add($"http://localhost:{port}/");
+        }
+        
         server.Start();
-        Console.WriteLine("HTTP Server started on http://localhost:5000/");
+        Console.WriteLine($"HTTP Server started on port {port}");
 
         // Handle requests in a background task
         _ = Task.Run(async () => await HandleHttpRequests(server));
 
-        // Keep the application running
-        Console.WriteLine("Press any key to exit...");
-        Console.ReadKey();
+        // Keep the application running (Azure manages lifecycle, local waits for key)
+        if (isAzure)
+        {
+            await Task.Delay(Timeout.Infinite);
+        }
+        else
+        {
+            Console.WriteLine("Press any key to exit...");
+            Console.ReadKey();
+        }
     }
 
     static async Task RunApplication()
