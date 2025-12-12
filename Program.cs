@@ -158,10 +158,11 @@ class Program
                             }
                         }
 
+                        // Always reset progress when endpoint is hit (even if using cached results)
+                        ProgressTracker.Reset();
+                        
                         if (shouldFetch)
                         {
-                            // Reset progress tracker
-                            ProgressTracker.Reset();
                             
                             // Delete old file to ensure fresh data
                             if (File.Exists(mdPath))
