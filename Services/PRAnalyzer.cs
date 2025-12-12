@@ -85,8 +85,8 @@ public class PRAnalyzer
         ProgressTracker.ProcessedPRs = 0;
         Console.WriteLine($"[PROGRESS] Initialized: Total={ProgressTracker.TotalPRs}, Processed=0");
         
-        // Wait 2 seconds to ensure UI polling catches the initial 0/50 state
-        await Task.Delay(2000);
+        // Wait 5 seconds to ensure UI polling catches the initial 0/50 state
+        await Task.Delay(5000);
         Console.WriteLine($"[PROGRESS] Starting PR processing...");
 
         // Process pull requests in batches
@@ -100,7 +100,7 @@ public class PRAnalyzer
             var batchTasks = batch.Select(prId => ProcessPRAsync(prId)).ToList();
             var results = await Task.WhenAll(batchTasks);
 
-            // Write results and update progress after each PR
+            // Write results and update progress after each PR with delay for UI to catch up
             using (StreamWriter markdownWriter = new StreamWriter(_outputPath, append: true))
             {
                 foreach (var prResult in results)
@@ -123,6 +123,9 @@ public class PRAnalyzer
                     
                     // Log progress update explicitly
                     Console.WriteLine($"[PROGRESS UPDATE] Backend now at: {processedCount}/{ProgressTracker.TotalPRs} PRs (Found: {foundCount})");
+                    
+                    // Small delay after each PR so frontend can poll and see the update
+                    await Task.Delay(500);
                 }
             }
 
