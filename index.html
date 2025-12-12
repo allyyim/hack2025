@@ -250,8 +250,8 @@
                                 const percentage = Math.round((progress.processed / progress.total) * 100);
                                 const newWidth = Math.max(1, percentage); // Always show at least 1%
                                 progressBar.style.width = `${newWidth}%`;
-                                progressBar.textContent = `${percentage}%`;
-                                progressText.textContent = `${progress.processed} PRs analyzed • ${progress.found} with important comments • Currently analyzing PR #${progress.currentPR || 'N/A'}`;
+                                progressBar.textContent = `${progress.processed}/${progress.total}`;
+                                progressText.textContent = `Parsed ${progress.processed} out of ${progress.total} PRs • ${progress.found} with important comments • Currently: PR #${progress.currentPR || 'N/A'}`;
                                 console.log(`Progress: ${percentage}% (${progress.processed}/${progress.total})`);
                             } else {
                                 console.log('Waiting for progress data...', progress);
