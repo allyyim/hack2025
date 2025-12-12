@@ -6,10 +6,32 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Azure.AI.OpenAI;
 using OpenAI.Chat;
+using System.Collections.Concurrent;
 using Azure.Identity;
+using Microsoft.Extensions.Configuration;
 
 class Program
 {
+    // --- Phase-0 stream catalog and subscriber storage ---
+    public record StreamDescriptor(string Id, string Title, string Description, string SchemaUrl, string SampleUrl, string ConnectUrl, int FreshnessSeconds);
+
+    static readonly List<StreamDescriptor> StreamCatalog = new()
+    {
+        new StreamDescriptor(
+            "pr-comments-analysis",
+            "PR Comments Analysis",
+            "AI-extracted terms, definitions, troubleshooting steps and developer tricks from PR comments",
+            "/api/streams/pr-comments-analysis/schema",
+            "/api/streams/pr-comments-analysis/sample",
+            "/streams/pr-comments-analysis/connect",
+            60
+        )
+    };
+
+    static readonly ConcurrentDictionary<string, List<HttpListenerResponse>> Subscribers = new();
+    static DateTime LastFetchTime = DateTime.MinValue;
+    static readonly object FetchLock = new object();
+
     static async Task Main(string[] args)
     {
         // Start HTTP server in background
@@ -32,7 +54,6 @@ class Program
         // Azure OpenAI Client Setup
         var deploymentName = "gpt-5-nano";
         var endpointUrl = "https://yimal-mfssuu7z-swedencentral.openai.azure.com/";
-        var key = "";
 
         var client = new AzureOpenAIClient(
             new Uri(endpointUrl), 
@@ -45,9 +66,24 @@ class Program
         #region Azure DevOps Setup
         // Azure DevOps API Setup
         Console.WriteLine("Fetching Pull Request Comments...");
+        Console.Out.Flush();
         string organization = "One";
         string repositoryName = "EngSys-MDA-AMCS";
-        string personalAccessToken = "6YDTIVeyHGnRp03Gr3KDMGQF0KbK5TsG4UpmBZnoAyHDIlAe1fMoJQQJ99BLACAAAAAAArohAAASAZDO1fPo";
+        
+        // Try environment variable first, then appsettings.json
+        string? personalAccessToken = Environment.GetEnvironmentVariable("ADO_PAT");
+        if (string.IsNullOrEmpty(personalAccessToken))
+        {
+            var config = new ConfigurationBuilder()
+                .SetBasePath(AppContext.BaseDirectory)
+                .AddJsonFile("appsettings.json", optional: true)
+                .Build();
+            personalAccessToken = config["AdoPat"];
+        }
+        if (string.IsNullOrEmpty(personalAccessToken))
+        {
+            throw new InvalidOperationException("ADO_PAT environment variable or appsettings.json AdoPat not set");
+        }
         string startDate = DateTime.UtcNow.AddDays(-30).ToString("yyyy-MM-ddTHH:mm:ssZ");
 
         // Azure DevOps API URL to fetch active PRs created in the last 30 days
@@ -68,70 +104,35 @@ class Program
         string importantCommentsMarkdownPath = Path.Combine(AppContext.BaseDirectory, $"important_comments.md");
 
         // Write the header only once at the beginning of the file
-        if (!File.Exists(importantCommentsMarkdownPath) || new FileInfo(importantCommentsMarkdownPath).Length == 0) // Check if the file is empty or doesn't exist
+        if (!File.Exists(importantCommentsMarkdownPath))
         {
-            using (StreamWriter markdownWriter = new StreamWriter(importantCommentsMarkdownPath, append: true))
+            using (StreamWriter markdownWriter = new StreamWriter(importantCommentsMarkdownPath, append: false))
             {
                 markdownWriter.WriteLine("# Important Comments from PRs from the last 30 Days");
                 markdownWriter.WriteLine();
             }
         }
 
-        // Process pull requests
+        // Process pull requests in parallel batches
         foreach (var batch in pullRequestIds.Chunk(5)) // Process in batches of 5
         {
-            foreach (var pullRequestId in batch)
+            // Process all PRs in batch concurrently
+            var batchTasks = batch.Select(prId => ProcessPRAsync(prId, organization, repositoryName, personalAccessToken, chatClient)).ToList();
+            var results = await Task.WhenAll(batchTasks);
+
+            // Write results sequentially (thread-safe)
+            using (StreamWriter markdownWriter = new StreamWriter(importantCommentsMarkdownPath, append: true))
             {
-                string prLink = $"https://msazure.visualstudio.com/{organization}/_git/{repositoryName}/pullrequest/{pullRequestId}";
-                string threadsUrl = $"https://msazure.visualstudio.com/DefaultCollection/{organization}/_apis/git/repositories/{repositoryName}/pullRequests/{pullRequestId}/threads?api-version=7.1-preview.1";
-                string commentsLogPath = Path.Combine(AppContext.BaseDirectory, $"comments_log_pr_{pullRequestId}.json");
-
-                try
+                foreach (var prResult in results)
                 {
-                    using (HttpClient httpClient = new HttpClient())
+                    if (prResult.HasContent)
                     {
-                        var authToken = Convert.ToBase64String(Encoding.ASCII.GetBytes($":{personalAccessToken}"));
-                        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", authToken);
-
-                        Console.WriteLine($"Fetching threads for PR #{pullRequestId}");
-
-                        HttpResponseMessage threadsResponse = await httpClient.GetAsync(threadsUrl);
-                        if (!threadsResponse.IsSuccessStatusCode)
-                        {
-                            Console.WriteLine($"Error fetching threads for PR #{pullRequestId}: {threadsResponse.StatusCode} - {threadsResponse.ReasonPhrase}");
-                            continue;
-                        }
-
-                        string threadsResponseBody = await threadsResponse.Content.ReadAsStringAsync();
-
-                        var threads = JsonSerializer.Deserialize<ThreadResponse>(threadsResponseBody, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
-                        // Track if any content is written for this PR
-                        bool hasContentForPR = false;
-
-                        using (StreamWriter markdownWriter = new StreamWriter(importantCommentsMarkdownPath, append: true)) // Enable append mode
-                        {
-                            foreach (var thread in threads.Value)
-                            {
-                                foreach (var comment in thread.Comments)
-                                {
-                                    ProcessComment(comment, thread, chatClient, markdownWriter, prLink, ref hasContentForPR, pullRequestId);
-                                }
-                            }
-
-                            // Close the <details> section after processing all comments for the PR
-                            CloseMarkdownSection(markdownWriter, hasContentForPR);
-
-                            if (!hasContentForPR)
-                            {
-                                Console.WriteLine($"No important comments found for PR #{pullRequestId}. Skipping markdown output.");
-                            }
-                        }
+                        markdownWriter.WriteLine(prResult.Content);
                     }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Failed to fetch comments for PR #{pullRequestId}: {ex.Message}");
+                    else if (prResult.PullRequestId > 0)
+                    {
+                        Console.WriteLine($"No important comments found for PR #{prResult.PullRequestId}. Skipping markdown output.");
+                    }
                 }
             }
 
@@ -140,6 +141,206 @@ class Program
             await Task.Delay(TimeSpan.FromMinutes(10));
         }
         #endregion
+    }
+
+    // A short, one-time fetch + process run (no long delays). Used by /important-comments.
+    static async Task FetchOnce()
+    {
+        // Delegate to RunApplication so there's a single implementation and console output.
+        try
+        {
+            await RunApplication();
+        }
+        catch (Exception ex)
+        {
+            // Log errors for visibility
+            Console.WriteLine($"FetchOnce error: {ex.GetType().Name}: {ex.Message}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"  Inner: {ex.InnerException.Message}");
+            }
+        }
+    }
+
+    // Process a single PR: fetch threads and analyze comments in parallel
+    static async Task<PRProcessResult> ProcessPRAsync(int pullRequestId, string organization, string repositoryName, string personalAccessToken, ChatClient chatClient)
+    {
+        string prLink = $"https://msazure.visualstudio.com/{organization}/_git/{repositoryName}/pullrequest/{pullRequestId}";
+        string threadsUrl = $"https://msazure.visualstudio.com/DefaultCollection/{organization}/_apis/git/repositories/{repositoryName}/pullRequests/{pullRequestId}/threads?api-version=7.1-preview.1";
+
+        try
+        {
+            using (HttpClient httpClient = new HttpClient())
+            {
+                var authToken = Convert.ToBase64String(Encoding.ASCII.GetBytes($":{personalAccessToken}"));
+                httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+                Console.WriteLine($"Fetching threads for PR #{pullRequestId}");
+
+                HttpResponseMessage threadsResponse = await httpClient.GetAsync(threadsUrl);
+                if (!threadsResponse.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"Error fetching threads for PR #{pullRequestId}: {threadsResponse.StatusCode} - {threadsResponse.ReasonPhrase}");
+                    return new PRProcessResult { PullRequestId = pullRequestId, HasContent = false };
+                }
+
+                string threadsResponseBody = await threadsResponse.Content.ReadAsStringAsync();
+                var threads = JsonSerializer.Deserialize<ThreadResponse>(threadsResponseBody, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                // Process all comments in parallel and collect results
+                var commentTasks = new List<Task<string>>();
+                foreach (var thread in threads.Value)
+                {
+                    foreach (var comment in thread.Comments)
+                    {
+                        commentTasks.Add(ProcessCommentAsync(comment, thread, chatClient, prLink));
+                    }
+                }
+
+                var commentResults = await Task.WhenAll(commentTasks);
+                var markdownContent = string.Concat(commentResults.Where(c => !string.IsNullOrEmpty(c)));
+
+                bool hasContent = !string.IsNullOrEmpty(markdownContent);
+
+                string output = "";
+                if (hasContent)
+                {
+                    output = $"<details>\n<summary>PR {pullRequestId} - Link: <a href=\"{prLink}\">{prLink}</a></summary>\n\n### Important Comments\n\n{markdownContent}</details>\n\n";
+                }
+
+                return new PRProcessResult 
+                { 
+                    PullRequestId = pullRequestId, 
+                    HasContent = hasContent, 
+                    Content = output 
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to fetch comments for PR #{pullRequestId}: {ex.Message}");
+            return new PRProcessResult { PullRequestId = pullRequestId, HasContent = false };
+        }
+    }
+
+    // Process a single comment asynchronously
+    static async Task<string> ProcessCommentAsync(Comment comment, Thread thread, ChatClient chatClient, string prLink)
+    {
+        string content = comment.Content;
+
+        // Skip comments containing specific phrases
+        if (string.IsNullOrEmpty(content) ||
+            content.Contains("Ownership Enforcer PME", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("Diff coverage check", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("AI feedback", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("PR description", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("Coverage", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("AI description", StringComparison.OrdinalIgnoreCase))
+        {
+            return "";
+        }
+
+        // Split the content into comment and reply
+        var contentLines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        string mainComment = contentLines.FirstOrDefault() ?? string.Empty;
+        string reply = string.Join(" ", contentLines.Skip(1));
+
+        // Prepare the input for the AI model
+        var messages = new List<ChatMessage>
+        {
+            new SystemChatMessage("You are an AI assistant that extracts terms and definitions from comments and replies."),
+            new UserChatMessage($@"
+                Given the following comment and reply:
+                Comment: {mainComment}
+                Reply: {reply}
+
+                Determine if the pairing is a troubleshooting step, interesting developer trick, or a definition of a term/concept.
+
+                Then extract and classify the following into 3 different categories:
+                1. Troubleshooting Step: A concise action or series of actions to resolve a specific issue (e.g., steps to debug a problem, fix a bug, or optimize performance).
+                2. Term/Definition Defined: A specific term or definition mentioned in the comment or reply. Whether that be a system, tool, framework, library, design pattern, architecture, or any other technical term (e.g., ARM, GIG, MDM, GA).
+                3. Interesting Developer Trick: A unique or clever technique used by developers to solve common problems (e.g., using a specific design pattern, leveraging a particular library, or employing a novel approach to coding challenges).
+
+                For each category, provide the following output format:
+                - If Term/Definition: Extract the term and provide its definition.
+                - If Troubleshooting Step: Summarize the troubleshooting step.
+                - If Interesting Developer Trick: Summarize the developer trick.
+                If the comment and reply do not fit into any of these categories, respond with 'No definition found' or 'No content to extract'.
+
+                Provide the output in the following format:
+                Term: [Extracted Term]
+                Definition: [Extracted Definition or Summary]
+            ")
+        };
+
+        // Call the AI client to analyze the input (non-blocking)
+        var response = await chatClient.CompleteChatAsync(messages, new ChatCompletionOptions
+        {
+            Temperature = 1f,
+            FrequencyPenalty = 0,
+            PresencePenalty = 0
+        });
+
+        // Parse the AI response
+        var aiResponse = response.Value.Content.Last().Text;
+
+        // Extract term, definition, troubleshooting step, and developer trick
+        string term = ExtractTermFromAIResponse(aiResponse);
+        string definition = ExtractDefinitionFromAIResponse(aiResponse);
+        string troubleshootingStep = ExtractTroubleshootingStep(aiResponse);
+        string developerTrick = ExtractDeveloperTrick(aiResponse);
+
+        // Skip entries with specific terms or definitions
+        if (term.Contains("vote", StringComparison.OrdinalIgnoreCase) ||
+            term.Contains("Branch", StringComparison.OrdinalIgnoreCase) ||
+            term.Contains("Git", StringComparison.OrdinalIgnoreCase) ||
+            term.Contains("PR description", StringComparison.OrdinalIgnoreCase) ||
+            term.Contains("PR Assistant", StringComparison.OrdinalIgnoreCase) ||
+            term.Contains("refs/", StringComparison.OrdinalIgnoreCase) ||
+            term.Contains("No content to extract", StringComparison.OrdinalIgnoreCase) ||
+            term.Contains("PRAssistant", StringComparison.OrdinalIgnoreCase)||
+            definition.Contains("No definition", StringComparison.OrdinalIgnoreCase) ||
+            definition.Contains("No content", StringComparison.OrdinalIgnoreCase) ||
+            definition.Contains("No additional information", StringComparison.OrdinalIgnoreCase) ||
+            developerTrick.Contains("No content to extract", StringComparison.OrdinalIgnoreCase))
+        {
+            return "";
+        }
+
+        // Skip entries with "Unknown..." or empty values
+        if (term.Contains("Unknown", StringComparison.OrdinalIgnoreCase) ||
+            definition.Contains("Unknown", StringComparison.OrdinalIgnoreCase) ||
+            troubleshootingStep.Contains("Unknown", StringComparison.OrdinalIgnoreCase) ||
+            developerTrick.Contains("Unknown", StringComparison.OrdinalIgnoreCase))
+        {
+            return "";
+        }
+
+        // Build markdown output
+        var sb = new StringBuilder();
+        sb.AppendLine($"### Thread {thread.Id}, Comment {comment.Id}");
+        sb.AppendLine();
+
+        if (!string.IsNullOrEmpty(troubleshootingStep))
+        {
+            sb.AppendLine($"**Troubleshooting Step:** {troubleshootingStep}");
+            sb.AppendLine();
+        }
+
+        if (!string.IsNullOrEmpty(term) && !string.IsNullOrEmpty(definition))
+        {
+            sb.AppendLine($"**Term/Concept Defined:** {term}");
+            sb.AppendLine($"**Definition:** {definition}");
+            sb.AppendLine();
+        }
+
+        if (!string.IsNullOrEmpty(developerTrick))
+        {
+            sb.AppendLine($"**Developer Trick:** {developerTrick}");
+            sb.AppendLine();
+        }
+
+        return sb.ToString();
     }
 
     static async Task HandleHttpRequests(HttpListener server)
@@ -193,6 +394,46 @@ class Program
                         await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
                     }
                 }
+                    else if (request.HttpMethod == "GET" && request.Url.AbsolutePath == "/important-comments")
+                    {
+                        // Serve the important_comments.md from project root (3 levels up)
+                        string mdPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "important_comments.md");
+                        mdPath = Path.GetFullPath(mdPath);
+                        response.ContentType = "text/html";
+
+                        // Only fetch if we haven't fetched in the last 5 minutes (debounce)
+                        lock (FetchLock)
+                        {
+                            if (DateTime.UtcNow.Subtract(LastFetchTime).TotalMinutes >= 5)
+                            {
+                                LastFetchTime = DateTime.UtcNow;
+                                // Kick off a short, one-time fetch in the background to populate the markdown
+                                var fetchTask = Task.Run(() => FetchOnce());
+                                // Wait up to 60 seconds for the fetch to complete
+                                var completed = Task.WaitAny(new[] { fetchTask }, TimeSpan.FromSeconds(60));
+                            }
+                        }
+
+                        if (File.Exists(mdPath))
+                        {
+                            string md = File.ReadAllText(mdPath);
+                            // Simple rendering: wrap markdown in <pre> to preserve formatting
+                            string html = $"<!doctype html><html><head><meta charset=\"utf-8\"><title>Important Comments</title></head><body style=\"font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;padding:20px;\"><pre style=\"white-space:pre-wrap;font-size:14px;\">{System.Net.WebUtility.HtmlEncode(md)}</pre></body></html>";
+                            response.StatusCode = 200;
+                            byte[] buffer = Encoding.UTF8.GetBytes(html);
+                            response.ContentLength64 = buffer.Length;
+                            await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                        }
+                        else
+                        {
+                            string body = "No important comments found yet. Try again in a few seconds if a fetch is in progress.";
+                            string html = $"<!doctype html><html><head><meta charset=\"utf-8\"><title>Important Comments</title></head><body style=\"font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;padding:20px;\">{System.Net.WebUtility.HtmlEncode(body)}</body></html>";
+                            response.StatusCode = 200;
+                            byte[] buffer = Encoding.UTF8.GetBytes(html);
+                            response.ContentLength64 = buffer.Length;
+                            await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                        }
+                    }
                 else
                 {
                     response.StatusCode = 404;
@@ -232,151 +473,7 @@ class Program
         }
     }
 
-    static void ProcessComment(Comment comment, Thread thread, ChatClient chatClient, StreamWriter markdownWriter, string prLink, ref bool hasContentForPR, int pullRequestId)
-    {
-        string content = comment.Content;
 
-        // Skip comments containing specific phrases
-        if (string.IsNullOrEmpty(content) ||
-            content.Contains("Ownership Enforcer PME", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("Diff coverage check", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("AI feedback", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("PR description", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("Coverage", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("AI description", StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        // Split the content into comment and reply
-        var contentLines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        string mainComment = contentLines.FirstOrDefault() ?? string.Empty;
-        string reply = string.Join(" ", contentLines.Skip(1));
-
-        // Prepare the input for the AI model
-        var messages = new List<ChatMessage>
-        {
-            new SystemChatMessage("You are an AI assistant that extracts terms and definitions from comments and replies."),
-            new UserChatMessage($@"
-                Given the following comment and reply:
-                Comment: {mainComment}
-                Reply: {reply}
-
-                Determine if the pairing is a troubleshooting step, interesting developer trick, or a definition of a term/concept.
-
-                Then extract and classify the following into 3 different categories:
-                1. Troubleshooting Step: A concise action or series of actions to resolve a specific issue (e.g., steps to debug a problem, fix a bug, or optimize performance).
-                2. Term/Definition Defined: A specific term or definition mentioned in the comment or reply. Whether that be a system, tool, framework, library, design pattern, architecture, or any other technical term (e.g., ARM, GIG, MDM, GA).
-                3. Interesting Developer Trick: A unique or clever technique used by developers to solve common problems (e.g., using a specific design pattern, leveraging a particular library, or employing a novel approach to coding challenges).
-
-                For each category, provide the following output format:
-                - If Term/Definition: Extract the term and provide its definition.
-                - If Troubleshooting Step: Summarize the troubleshooting step.
-                - If Interesting Developer Trick: Summarize the developer trick.
-                If the comment and reply do not fit into any of these categories, respond with 'No definition found' or 'No content to extract'.
-
-                Provide the output in the following format:
-                Term: [Extracted Term]
-                Definition: [Extracted Definition or Summary]
-            ")
-        };
-
-        // Call the AI client to analyze the input
-        var response = chatClient.CompleteChatAsync(messages, new ChatCompletionOptions
-        {
-            Temperature = 1f,
-            FrequencyPenalty = 0,
-            PresencePenalty = 0
-        }).Result;
-
-        // Parse the AI response
-        var aiResponse = response.Value.Content.Last().Text;
-
-        // Extract term, definition, troubleshooting step, and developer trick
-        string term = ExtractTermFromAIResponse(aiResponse);
-        string definition = ExtractDefinitionFromAIResponse(aiResponse);
-        string troubleshootingStep = ExtractTroubleshootingStep(aiResponse);
-        string developerTrick = ExtractDeveloperTrick(aiResponse);
-
-        // Skip entries with specific terms or definitions
-        if (term.Contains("vote", StringComparison.OrdinalIgnoreCase) ||
-            term.Contains("Branch", StringComparison.OrdinalIgnoreCase) ||
-            term.Contains("Git", StringComparison.OrdinalIgnoreCase) ||
-            term.Contains("PR description", StringComparison.OrdinalIgnoreCase) ||
-            term.Contains("PR Assistant", StringComparison.OrdinalIgnoreCase) ||
-            term.Contains("refs/", StringComparison.OrdinalIgnoreCase) ||
-            term.Contains("No content to extract", StringComparison.OrdinalIgnoreCase) ||
-            term.Contains("PRAssistant", StringComparison.OrdinalIgnoreCase)||
-            definition.Contains("No definition", StringComparison.OrdinalIgnoreCase) ||
-            definition.Contains("No content", StringComparison.OrdinalIgnoreCase) ||
-            definition.Contains("No additional information", StringComparison.OrdinalIgnoreCase) ||
-            developerTrick.Contains("No content to extract", StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        // Skip entries with "Unknown..." or empty values
-        if (term.Contains("Unknown", StringComparison.OrdinalIgnoreCase) ||
-            definition.Contains("Unknown", StringComparison.OrdinalIgnoreCase) ||
-            troubleshootingStep.Contains("Unknown", StringComparison.OrdinalIgnoreCase) ||
-            developerTrick.Contains("Unknown", StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        // Write each category to markdown if applicable
-        if (!string.IsNullOrEmpty(troubleshootingStep))
-        {
-            WriteMarkdownHeaderIfNeeded(markdownWriter, ref hasContentForPR, pullRequestId, prLink);
-            markdownWriter.WriteLine($"### Thread {thread.Id}, Comment {comment.Id}");
-            markdownWriter.WriteLine();
-            markdownWriter.WriteLine($"**Troubleshooting Step:** {troubleshootingStep}");
-            markdownWriter.WriteLine();
-        }
-
-        if (!string.IsNullOrEmpty(term) && !string.IsNullOrEmpty(definition))
-        {
-            WriteMarkdownHeaderIfNeeded(markdownWriter, ref hasContentForPR, pullRequestId, prLink);
-            markdownWriter.WriteLine($"### Thread {thread.Id}, Comment {comment.Id}");
-            markdownWriter.WriteLine();
-            markdownWriter.WriteLine($"**Term/Concept Defined:** {term}");
-            markdownWriter.WriteLine($"**Definition:** {definition}");
-            markdownWriter.WriteLine();
-        }
-
-        if (!string.IsNullOrEmpty(developerTrick))
-        {
-            WriteMarkdownHeaderIfNeeded(markdownWriter, ref hasContentForPR, pullRequestId, prLink);
-            markdownWriter.WriteLine($"### Thread {thread.Id}, Comment {comment.Id}");
-            markdownWriter.WriteLine();
-            markdownWriter.WriteLine($"**Developer Trick:** {developerTrick}");
-            markdownWriter.WriteLine();
-        }
-    }
-
-   static void WriteMarkdownHeaderIfNeeded(StreamWriter markdownWriter, ref bool hasContentForPR, int pullRequestId, string prLink)
-    {
-        if (!hasContentForPR)
-        {
-            // Use HTML <details> and <summary> tags for collapsible sections
-            markdownWriter.WriteLine($"<details>");
-            markdownWriter.WriteLine($"<summary>PR {pullRequestId} - Link: <a href=\"{prLink}\">{prLink}</a></summary>");
-            markdownWriter.WriteLine();
-            markdownWriter.WriteLine("### Important Comments");
-            markdownWriter.WriteLine();
-            hasContentForPR = true;
-        }
-    }
-
-    static void CloseMarkdownSection(StreamWriter markdownWriter, bool hasContentForPR)
-    {
-        if (hasContentForPR)
-        {
-            // Close the <details> tag to prevent nesting
-            markdownWriter.WriteLine("</details>");
-            markdownWriter.WriteLine();
-        }
-    }
 
     static string ExtractTermFromAIResponse(string aiResponse)
     {
@@ -436,6 +533,13 @@ class Program
     public class PullRequest
     {
         public int PullRequestId { get; set; }
+    }
+
+    public class PRProcessResult
+    {
+        public int PullRequestId { get; set; }
+        public bool HasContent { get; set; }
+        public string Content { get; set; } = "";
     }
     #endregion
 }

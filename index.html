@@ -21,7 +21,7 @@
             border-radius: 10px;
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
             text-align: center;
-            max-width: 600px;
+            max-width: 900px;
             width: 90%;
         }
 
@@ -88,14 +88,57 @@
             color: #dc3545;
             font-weight: 600;
         }
+
+        #commentsContainer {
+            display: none;
+            margin-top: 30px;
+            text-align: left;
+            max-height: 600px;
+            overflow-y: auto;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #fafafa;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        #commentsContainer.visible {
+            display: block;
+        }
+
+        #commentsContent {
+            white-space: pre-wrap;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(102, 126, 234, 0.3);
+            border-radius: 50%;
+            border-top-color: #667eea;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h2>ADO PRism</h2>
         <p>Unlock your team's collective knowledge. Automatically extract key terms, solutions, and best practices from PR discussions using AI.</p>
-        <button id="fetchBtn" onclick="fetchComments()">Fetch Comments</button>
+        <div style="display:flex;gap:12px;justify-content:center;">
+            <button id="subscribeBtn" onclick="openComments()">View Important Comments</button>
+        </div>
         <div id="status" class="status"></div>
+        <div id="commentsContainer">
+            <h3 style="margin-top:0;color:#333;">Important Comments</h3>
+            <div id="commentsContent"></div>
+        </div>
     </div>
 
     <script>
@@ -121,6 +164,49 @@
                 } else {
                     const error = await response.text();
                     status.textContent = `✗ Error: ${error}`;
+                    status.className = 'status error';
+                }
+            } catch (error) {
+                status.textContent = `✗ Connection error: ${error.message}`;
+                status.className = 'status error';
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        async function openComments() {
+            const button = document.getElementById('subscribeBtn');
+            const status = document.getElementById('status');
+            const container = document.getElementById('commentsContainer');
+            const content = document.getElementById('commentsContent');
+            
+            button.disabled = true;
+            status.innerHTML = '<span class="loading-spinner"></span> Loading comments...';
+            status.className = 'status loading';
+
+            try {
+                const response = await fetch('http://localhost:5000/important-comments');
+
+                if (response.ok) {
+                    const html = await response.text();
+                    // Extract content from the <pre> tag
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    const preContent = doc.querySelector('pre');
+                    
+                    if (preContent) {
+                        content.textContent = preContent.textContent;
+                        container.classList.add('visible');
+                        status.textContent = '✓ Comments loaded successfully!';
+                        status.className = 'status success';
+                    } else {
+                        content.textContent = html;
+                        container.classList.add('visible');
+                        status.textContent = '✓ Comments loaded!';
+                        status.className = 'status success';
+                    }
+                } else {
+                    status.textContent = `✗ Error loading comments: ${response.status}`;
                     status.className = 'status error';
                 }
             } catch (error) {

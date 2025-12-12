@@ -59,6 +59,10 @@
               "target": "Package",
               "version": "[1.16.0, )"
             },
+            "Microsoft.Extensions.Configuration.Json": {
+              "target": "Package",
+              "version": "[8.0.0, )"
+            },
             "Quartz": {
               "target": "Package",
               "version": "[3.15.0, )"
