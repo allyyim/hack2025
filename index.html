@@ -129,9 +129,43 @@
 </head>
 <body>
     <div class="container">
+        <!-- PRism Logo -->
+        <svg width="80" height="80" viewBox="0 0 100 100" style="margin-bottom:20px;">
+            <!-- Prism shape -->
+            <defs>
+                <linearGradient id="prismGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+                    <stop offset="50%" style="stop-color:#764ba2;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#f093fb;stop-opacity:1" />
+                </linearGradient>
+                <linearGradient id="lightBeam" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.8" />
+                    <stop offset="100%" style="stop-color:#667eea;stop-opacity:0.3" />
+                </linearGradient>
+            </defs>
+            
+            <!-- Incoming light beam -->
+            <line x1="5" y1="50" x2="30" y2="50" stroke="url(#lightBeam)" stroke-width="8" opacity="0.6"/>
+            
+            <!-- Prism triangle -->
+            <polygon points="35,30 35,70 65,50" fill="url(#prismGradient)" stroke="#5a67d8" stroke-width="2" opacity="0.9"/>
+            
+            <!-- Spectrum rays coming out -->
+            <line x1="65" y1="50" x2="95" y2="35" stroke="#f093fb" stroke-width="3" opacity="0.8"/>
+            <line x1="65" y1="50" x2="95" y2="45" stroke="#764ba2" stroke-width="3" opacity="0.8"/>
+            <line x1="65" y1="50" x2="95" y2="55" stroke="#667eea" stroke-width="3" opacity="0.8"/>
+            <line x1="65" y1="50" x2="95" y2="65" stroke="#4c51bf" stroke-width="3" opacity="0.8"/>
+            
+            <!-- Small dots representing data points -->
+            <circle cx="88" cy="35" r="2" fill="#f093fb"/>
+            <circle cx="90" cy="45" r="2" fill="#764ba2"/>
+            <circle cx="90" cy="55" r="2" fill="#667eea"/>
+            <circle cx="88" cy="65" r="2" fill="#4c51bf"/>
+        </svg>
+        
         <h2>ADO PRism</h2>
         <p class="tagline" style="font-size:18px;font-weight:500;color:#667eea;margin-bottom:10px;">Transforming PR discussions into consumable knowledge signals</p>
-        <p>ADO PRism makes team knowledge discoverable and consumable in real-time. By analyzing PR comments through Azure OpenAI, it automatically extracts and streams actionable insights—terms, troubleshooting steps, and developer best practices—as structured signals that AI agents and developers can easily discover and consume, eliminating the need for every team to rebuild custom knowledge extraction pipelines.</p>
+        <p>ADO PRism makes team knowledge discoverable and consumable in real-time. By analyzing PR comments through Azure OpenAI, it automatically extracts and streams actionable insights-terms, troubleshooting steps, and developer best practices—as structured signals that AI agents and developers can easily discover and consume, eliminating the need for every team to rebuild custom knowledge extraction pipelines.</p>
         <div style="display:flex;gap:12px;justify-content:center;">
             <button id="subscribeBtn" onclick="openComments()">View Important Comments</button>
         </div>
@@ -152,7 +186,7 @@
             status.className = 'status loading';
 
             try {
-                const response = await fetch('http://localhost:5000/api/fetch-comments', {
+                const response = await fetch('/api/fetch-comments', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -186,7 +220,8 @@
             status.className = 'status loading';
 
             try {
-                const response = await fetch('http://localhost:5000/important-comments');
+                // Use relative URL so it works both locally and on Azure
+                const response = await fetch('/important-comments');
 
                 if (response.ok) {
                     const html = await response.text();
