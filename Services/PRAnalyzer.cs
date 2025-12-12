@@ -139,7 +139,7 @@ public class PRAnalyzer
             {
                 foreach (var comment in thread.Comments)
                 {
-                    if (_commentProcessor.ShouldProcessComment(comment.Content ?? ""))
+                    if (CommentProcessor.ShouldProcessComment(comment.Content ?? ""))
                     {
                         commentTasks.Add(_commentProcessor.ProcessCommentAsync(comment, thread, prLink));
                     }

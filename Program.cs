@@ -176,12 +176,25 @@ class Program
                             }
                             else
                             {
-                                // Render markdown as HTML (it already contains HTML tags like <details>)
-                                string html = $"<!doctype html><html><head><meta charset=\"utf-8\"><title>Important Comments</title><style>details{{margin-bottom:20px;border:1px solid #ddd;padding:10px;border-radius:5px;}}summary{{cursor:pointer;font-weight:bold;color:#667eea;}}summary:hover{{color:#4c51bf;}}</style></head><body style=\"font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;padding:20px;\">{md}</body></html>";
-                                response.StatusCode = 200;
-                                byte[] buffer = Encoding.UTF8.GetBytes(html);
-                                response.ContentLength64 = buffer.Length;
-                                await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                                // Check if only header exists (no actual comments found)
+                                if (md.Trim().StartsWith("# Important Comments") && md.Trim().Split('\n').Length <= 3)
+                                {
+                                    string body = "Processing completed but no important comments were found in the last 7 days. The PRs may contain only automated/bot comments or general discussion without technical insights.";
+                                    string html = $"<!doctype html><html><head><meta charset=\"utf-8\"><title>Important Comments</title></head><body style=\"font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;padding:20px;\"><h2>No Important Comments Found</h2><p>{body}</p></body></html>";
+                                    response.StatusCode = 200;
+                                    byte[] buffer = Encoding.UTF8.GetBytes(html);
+                                    response.ContentLength64 = buffer.Length;
+                                    await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                                }
+                                else
+                                {
+                                    // Render markdown as HTML (it already contains HTML tags like <details>)
+                                    string html = $"<!doctype html><html><head><meta charset=\"utf-8\"><title>Important Comments</title><style>details{{margin-bottom:20px;border:1px solid #ddd;padding:10px;border-radius:5px;}}summary{{cursor:pointer;font-weight:bold;color:#667eea;}}summary:hover{{color:#4c51bf;}}</style></head><body style=\"font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;padding:20px;\">{md}</body></html>";
+                                    response.StatusCode = 200;
+                                    byte[] buffer = Encoding.UTF8.GetBytes(html);
+                                    response.ContentLength64 = buffer.Length;
+                                    await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                                }
                             }
                         }
                         else

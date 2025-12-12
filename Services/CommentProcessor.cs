@@ -14,7 +14,7 @@ public class CommentProcessor
         _chatClient = chatClient;
     }
 
-    public bool ShouldProcessComment(string content)
+    public static bool ShouldProcessComment(string content)
     {
         return !string.IsNullOrEmpty(content) &&
                !content.Contains("Ownership Enforcer", StringComparison.OrdinalIgnoreCase) &&
@@ -23,7 +23,8 @@ public class CommentProcessor
                !content.Contains("Coverage", StringComparison.OrdinalIgnoreCase) &&
                !content.Contains("PR description", StringComparison.OrdinalIgnoreCase) &&
                !content.Contains("AI description", StringComparison.OrdinalIgnoreCase) &&
-               content.Length > 20;
+               !content.Contains("PRAssistant", StringComparison.OrdinalIgnoreCase) &&
+               content.Length > 15; // Reduced from 20 to catch more content
     }
 
     public async Task<string> ProcessCommentAsync(Comment comment, CommentThread thread, string prLink)
@@ -43,28 +44,25 @@ public class CommentProcessor
         // Prepare the input for the AI model
         var messages = new List<ChatMessage>
         {
-            new SystemChatMessage("You are an AI assistant that extracts terms and definitions from comments and replies."),
+            new SystemChatMessage("You are an AI assistant that extracts important technical insights from PR comments."),
             new UserChatMessage($@"
-                Given the following comment and reply:
+                Analyze this PR comment and extract any important technical information:
                 Comment: {mainComment}
                 Reply: {reply}
 
-                Determine if the pairing is a troubleshooting step, interesting developer trick, or a definition of a term/concept.
+                Extract and categorize insights into these categories:
+                1. **Technical Concept/Term**: Any technical term, acronym, system name, or concept being explained (e.g., BCDR, VDCR, ARM, MDM)
+                2. **Business Logic**: Conditional logic, rules, or decision-making explained (e.g., ""if workspace has X, then Y should happen"")
+                3. **Troubleshooting**: Steps to debug, fix bugs, or resolve issues
+                4. **Code Pattern/Trick**: Clever techniques, design patterns, or coding approaches
+                5. **Configuration/Setup**: How to configure systems, settings, or deployment instructions
 
-                Then extract and classify the following into 3 different categories:
-                1. Troubleshooting Step: A concise action or series of actions to resolve a specific issue (e.g., steps to debug a problem, fix a bug, or optimize performance).
-                2. Term/Definition Defined: A specific term or definition mentioned in the comment or reply. Whether that be a system, tool, framework, library, design pattern, architecture, or any other technical term (e.g., ARM, GIG, MDM, GA).
-                3. Interesting Developer Trick: A unique or clever technique used by developers to solve common problems (e.g., using a specific design pattern, leveraging a particular library, or employing a novel approach to coding challenges).
+                Format your response as:
+                Category: [One of the above categories]
+                Summary: [Brief summary of the insight]
+                Details: [More detailed explanation if needed]
 
-                For each category, provide the following output format:
-                - If Term/Definition: Extract the term and provide its definition.
-                - If Troubleshooting Step: Summarize the troubleshooting step.
-                - If Interesting Developer Trick: Summarize the developer trick.
-                If the comment and reply do not fit into any of these categories, respond with 'No definition found' or 'No content to extract'.
-
-                Provide the output in the following format:
-                Term: [Extracted Term]
-                Definition: [Extracted Definition or Summary]
+                Only respond with 'No important content' if this is truly just casual discussion, automated messages, or has no technical value.
             ")
         };
 
@@ -79,85 +77,63 @@ public class CommentProcessor
         // Parse the AI response
         var aiResponse = response.Value.Content.Last().Text;
 
-        // Extract information
-        string term = ExtractTermFromAIResponse(aiResponse);
-        string definition = ExtractDefinitionFromAIResponse(aiResponse);
-        string troubleshootingStep = ExtractTroubleshootingStep(aiResponse);
-        string developerTrick = ExtractDeveloperTrick(aiResponse);
+        // Filter out non-important content
+        if (aiResponse.Contains("No important content", StringComparison.OrdinalIgnoreCase) ||
+            aiResponse.Contains("No definition found", StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Empty;
+        }
 
-        // Filter out unwanted results
-        if (ShouldFilterResult(term, definition, troubleshootingStep, developerTrick))
+        // Extract information using new format
+        string category = ExtractField(aiResponse, "Category");
+        string summary = ExtractField(aiResponse, "Summary");
+        string details = ExtractField(aiResponse, "Details");
+
+        // Skip if no meaningful content
+        if (string.IsNullOrEmpty(summary) || summary.Contains("Unknown", StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Empty;
+        }
+
+        // Filter out git/PR meta comments
+        var filterTerms = new[] { "vote", "Branch", "Git", "PR description", "PR Assistant", "refs/", "PRAssistant" };
+        if (filterTerms.Any(f => summary.Contains(f, StringComparison.OrdinalIgnoreCase)))
         {
             return string.Empty;
         }
 
         // Build markdown output
-        return BuildMarkdownOutput(thread.Id, comment.Id, term, definition, troubleshootingStep, developerTrick);
+        return BuildMarkdownOutput(thread.Id, comment.Id, category, summary, details);
     }
 
-    private bool ShouldFilterResult(string term, string definition, string troubleshootingStep, string developerTrick)
-    {
-        var filterTerms = new[] { "vote", "Branch", "Git", "PR description", "PR Assistant", "refs/", 
-                                  "No content to extract", "PRAssistant", "Unknown" };
-        
-        var filterDefinitions = new[] { "No definition", "No content", "No additional information", "Unknown" };
-
-        return filterTerms.Any(f => term.Contains(f, StringComparison.OrdinalIgnoreCase)) ||
-               filterDefinitions.Any(f => definition.Contains(f, StringComparison.OrdinalIgnoreCase)) ||
-               troubleshootingStep.Contains("Unknown", StringComparison.OrdinalIgnoreCase) ||
-               developerTrick.Contains("No content to extract", StringComparison.OrdinalIgnoreCase) ||
-               developerTrick.Contains("Unknown", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private string BuildMarkdownOutput(int threadId, int commentId, string term, string definition, string troubleshootingStep, string developerTrick)
+    private static string BuildMarkdownOutput(int threadId, int commentId, string category, string summary, string details)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"### Thread {threadId}, Comment {commentId}");
         sb.AppendLine();
 
-        if (!string.IsNullOrEmpty(troubleshootingStep))
+        if (!string.IsNullOrEmpty(category))
         {
-            sb.AppendLine($"**Troubleshooting Step:** {troubleshootingStep}");
-            sb.AppendLine();
+            sb.AppendLine($"**Category:** {category}");
         }
 
-        if (!string.IsNullOrEmpty(term) && !string.IsNullOrEmpty(definition))
+        if (!string.IsNullOrEmpty(summary))
         {
-            sb.AppendLine($"**Term/Concept Defined:** {term}");
-            sb.AppendLine($"**Definition:** {definition}");
-            sb.AppendLine();
+            sb.AppendLine($"**Summary:** {summary}");
         }
 
-        if (!string.IsNullOrEmpty(developerTrick))
+        if (!string.IsNullOrEmpty(details) && !details.Contains("Unknown", StringComparison.OrdinalIgnoreCase))
         {
-            sb.AppendLine($"**Developer Trick:** {developerTrick}");
-            sb.AppendLine();
+            sb.AppendLine($"**Details:** {details}");
         }
 
+        sb.AppendLine();
         return sb.ToString();
     }
 
-    private string ExtractTermFromAIResponse(string aiResponse)
+    private static string ExtractField(string aiResponse, string fieldName)
     {
-        var match = Regex.Match(aiResponse, @"Term:\s*(.*)", RegexOptions.IgnoreCase);
-        return match.Success ? match.Groups[1].Value.Trim() : "Unknown Term";
-    }
-
-    private string ExtractDefinitionFromAIResponse(string aiResponse)
-    {
-        var match = Regex.Match(aiResponse, @"Definition:\s*(.*)", RegexOptions.IgnoreCase);
-        return match.Success ? match.Groups[1].Value.Trim() : "Unknown Definition";
-    }
-
-    private string ExtractTroubleshootingStep(string aiResponse)
-    {
-        var match = Regex.Match(aiResponse, @"Troubleshooting Step:\s*(.*)", RegexOptions.IgnoreCase);
-        return match.Success ? match.Groups[1].Value.Trim() : "Unknown Troubleshooting Step";
-    }
-
-    private string ExtractDeveloperTrick(string aiResponse)
-    {
-        var match = Regex.Match(aiResponse, @"Developer Trick:\s*(.*)", RegexOptions.IgnoreCase);
-        return match.Success ? match.Groups[1].Value.Trim() : "Unknown Developer Trick";
+        var match = Regex.Match(aiResponse, $@"{fieldName}:\s*(.*?)(?=\n[A-Z][a-z]+:|$)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        return match.Success ? match.Groups[1].Value.Trim() : string.Empty;
     }
 }
