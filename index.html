@@ -263,7 +263,8 @@
                             } else if (progress.total > 0) {
                                 // Analyzing phase
                                 const percentage = Math.round((progress.processed / progress.total) * 100);
-                                progressBar.style.backgroundSize = `${percentage}%`;
+                                // Set background-size for both gradients (colored stripe, gray stripe)
+                                progressBar.style.backgroundSize = `${percentage}%, 100%`;
                                 progressBar.textContent = `${progress.processed}/${progress.total}`;
                                 
                                 // Update text immediately even if no PRs processed yet
