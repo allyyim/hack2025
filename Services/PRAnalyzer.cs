@@ -78,6 +78,9 @@ public class PRAnalyzer
         // Initialize progress tracking with actual count
         ProgressTracker.TotalPRs = pullRequestIds.Count;
         Console.WriteLine($"[PROGRESS] Initialized: Total={ProgressTracker.TotalPRs}");
+        
+        // Wait 1 second to ensure UI polling catches the initial 0/50 state
+        await Task.Delay(1000);
 
         // Process pull requests in batches
         int processedCount = 0;
