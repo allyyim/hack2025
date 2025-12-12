@@ -216,7 +216,7 @@
             const content = document.getElementById('commentsContent');
             
             button.disabled = true;
-            status.innerHTML = '<span class="loading-spinner"></span> Loading comments...';
+            status.innerHTML = '<span class="loading-spinner"></span> Analyzing PRs... This may take a few minutes';
             status.className = 'status loading';
 
             try {
@@ -225,18 +225,19 @@
 
                 if (response.ok) {
                     const html = await response.text();
-                    // Extract content from the <pre> tag
+                    // Parse the HTML response and extract body content
                     const parser = new DOMParser();
                     const doc = parser.parseFromString(html, 'text/html');
-                    const preContent = doc.querySelector('pre');
+                    const bodyContent = doc.querySelector('body');
                     
-                    if (preContent) {
-                        content.textContent = preContent.textContent;
+                    if (bodyContent) {
+                        // Insert the HTML content directly (it includes <details> tags)
+                        content.innerHTML = bodyContent.innerHTML;
                         container.classList.add('visible');
                         status.textContent = '✓ Comments loaded successfully!';
                         status.className = 'status success';
                     } else {
-                        content.textContent = html;
+                        content.innerHTML = html;
                         container.classList.add('visible');
                         status.textContent = '✓ Comments loaded!';
                         status.className = 'status success';

@@ -421,32 +421,67 @@ class Program
                         response.ContentType = "text/html";
 
                         // Only fetch if we haven't fetched in the last 5 minutes (debounce)
+                        bool shouldFetch = false;
                         lock (FetchLock)
                         {
                             if (DateTime.UtcNow.Subtract(LastFetchTime).TotalMinutes >= 5)
                             {
                                 LastFetchTime = DateTime.UtcNow;
-                                // Kick off a short, one-time fetch in the background to populate the markdown
-                                var fetchTask = Task.Run(() => FetchOnce());
-                                // Wait up to 60 seconds for the fetch to complete
-                                var completed = Task.WaitAny(new[] { fetchTask }, TimeSpan.FromSeconds(60));
+                                shouldFetch = true;
+                            }
+                        }
+
+                        if (shouldFetch)
+                        {
+                            // Delete old file to ensure fresh data
+                            if (File.Exists(mdPath))
+                            {
+                                File.Delete(mdPath);
+                            }
+                            
+                            // Start fetch and wait for completion
+                            try
+                            {
+                                await FetchOnce();
+                            }
+                            catch (Exception ex)
+                            {
+                                string errorHtml = $"<!doctype html><html><head><meta charset=\"utf-8\"><title>Error</title></head><body style=\"font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;padding:20px;\"><h2>Error fetching comments</h2><p>{System.Net.WebUtility.HtmlEncode(ex.Message)}</p></body></html>";
+                                response.StatusCode = 500;
+                                byte[] errorBuffer = Encoding.UTF8.GetBytes(errorHtml);
+                                response.ContentLength64 = errorBuffer.Length;
+                                await response.OutputStream.WriteAsync(errorBuffer, 0, errorBuffer.Length);
+                                response.Close();
+                                continue;
                             }
                         }
 
                         if (File.Exists(mdPath))
                         {
                             string md = File.ReadAllText(mdPath);
-                            // Simple rendering: wrap markdown in <pre> to preserve formatting
-                            string html = $"<!doctype html><html><head><meta charset=\"utf-8\"><title>Important Comments</title></head><body style=\"font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;padding:20px;\"><pre style=\"white-space:pre-wrap;font-size:14px;\">{System.Net.WebUtility.HtmlEncode(md)}</pre></body></html>";
-                            response.StatusCode = 200;
-                            byte[] buffer = Encoding.UTF8.GetBytes(html);
-                            response.ContentLength64 = buffer.Length;
-                            await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                            if (string.IsNullOrWhiteSpace(md))
+                            {
+                                string body = "No important comments were found in the PRs.";
+                                string html = $"<!doctype html><html><head><meta charset=\"utf-8\"><title>Important Comments</title></head><body style=\"font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;padding:20px;\">{body}</body></html>";
+                                response.StatusCode = 200;
+                                byte[] buffer = Encoding.UTF8.GetBytes(html);
+                                response.ContentLength64 = buffer.Length;
+                                await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                            }
+                            else
+                            {
+                                // Render markdown as HTML (it already contains HTML tags like <details>)
+                                string html = $"<!doctype html><html><head><meta charset=\"utf-8\"><title>Important Comments</title><style>details{{margin-bottom:20px;border:1px solid #ddd;padding:10px;border-radius:5px;}}summary{{cursor:pointer;font-weight:bold;color:#667eea;}}summary:hover{{color:#4c51bf;}}</style></head><body style=\"font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;padding:20px;\">{md}</body></html>";
+                                response.StatusCode = 200;
+                                byte[] buffer = Encoding.UTF8.GetBytes(html);
+                                response.ContentLength64 = buffer.Length;
+                                await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                            }
                         }
                         else
                         {
-                            string body = "No important comments found yet. Try again in a few seconds if a fetch is in progress.";
-                            string html = $"<!doctype html><html><head><meta charset=\"utf-8\"><title>Important Comments</title></head><body style=\"font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;padding:20px;\">{System.Net.WebUtility.HtmlEncode(body)}</body></html>";
+                            string body = "Could not load comments. Please try again.";
+                            string html = $"<!doctype html><html><head><meta charset=\"utf-8\"><title>Important Comments</title></head><body style=\"font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;padding:20px;\">{body}</body></html>";
                             response.StatusCode = 200;
                             byte[] buffer = Encoding.UTF8.GetBytes(html);
                             response.ContentLength64 = buffer.Length;
