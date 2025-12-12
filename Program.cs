@@ -51,7 +51,7 @@ class Program
     {
         string importantCommentsMarkdownPath = Path.Combine(AppContext.BaseDirectory, "important_comments.md");
         var analyzer = new PRAnalyzer(importantCommentsMarkdownPath);
-        await analyzer.AnalyzePullRequestsAsync(daysBack: 7, maxPRs: 15);
+        await analyzer.AnalyzePullRequestsAsync(daysBack: 30, maxPRs: 50);
     }
 
     static async Task FetchOnce()
@@ -165,10 +165,16 @@ class Program
                         if (File.Exists(mdPath))
                         {
                             string md = File.ReadAllText(mdPath);
-                            if (string.IsNullOrWhiteSpace(md))
+                            
+                            // Check if file only has header (no actual comments)
+                            bool hasOnlyHeader = md.Trim().StartsWith("# Important Comments") && 
+                                                 !md.Contains("<details>") &&
+                                                 md.Trim().Split('\n').Length <= 3;
+                            
+                            if (string.IsNullOrWhiteSpace(md) || hasOnlyHeader)
                             {
-                                string body = "No important comments were found in the PRs.";
-                                string html = $"<!doctype html><html><head><meta charset=\"utf-8\"><title>Important Comments</title></head><body style=\"font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;padding:20px;\">{body}</body></html>";
+                                string body = "No important comments were found in the last 30 days after analyzing 50 PRs. This could mean: PRs contain mostly automated/bot comments, general discussion without technical insights, or the filtering criteria may be too strict.";
+                                string html = $"<!doctype html><html><head><meta charset=\"utf-8\"><title>Important Comments</title></head><body style=\"font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;padding:20px;\"><h2>No Important Comments Found</h2><p>{body}</p></body></html>";
                                 response.StatusCode = 200;
                                 byte[] buffer = Encoding.UTF8.GetBytes(html);
                                 response.ContentLength64 = buffer.Length;
@@ -176,25 +182,12 @@ class Program
                             }
                             else
                             {
-                                // Check if only header exists (no actual comments found)
-                                if (md.Trim().StartsWith("# Important Comments") && md.Trim().Split('\n').Length <= 3)
-                                {
-                                    string body = "Processing completed but no important comments were found in the last 7 days. The PRs may contain only automated/bot comments or general discussion without technical insights.";
-                                    string html = $"<!doctype html><html><head><meta charset=\"utf-8\"><title>Important Comments</title></head><body style=\"font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;padding:20px;\"><h2>No Important Comments Found</h2><p>{body}</p></body></html>";
-                                    response.StatusCode = 200;
-                                    byte[] buffer = Encoding.UTF8.GetBytes(html);
-                                    response.ContentLength64 = buffer.Length;
-                                    await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
-                                }
-                                else
-                                {
-                                    // Render markdown as HTML (it already contains HTML tags like <details>)
-                                    string html = $"<!doctype html><html><head><meta charset=\"utf-8\"><title>Important Comments</title><style>details{{margin-bottom:20px;border:1px solid #ddd;padding:10px;border-radius:5px;}}summary{{cursor:pointer;font-weight:bold;color:#667eea;}}summary:hover{{color:#4c51bf;}}</style></head><body style=\"font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;padding:20px;\">{md}</body></html>";
-                                    response.StatusCode = 200;
-                                    byte[] buffer = Encoding.UTF8.GetBytes(html);
-                                    response.ContentLength64 = buffer.Length;
-                                    await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
-                                }
+                                // Render markdown as HTML (it already contains HTML tags like <details>)
+                                string html = $"<!doctype html><html><head><meta charset=\"utf-8\"><title>Important Comments</title><style>details{{margin-bottom:20px;border:1px solid #ddd;padding:10px;border-radius:5px;}}summary{{cursor:pointer;font-weight:bold;color:#667eea;}}summary:hover{{color:#4c51bf;}}</style></head><body style=\"font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;padding:20px;\">{md}</body></html>";
+                                response.StatusCode = 200;
+                                byte[] buffer = Encoding.UTF8.GetBytes(html);
+                                response.ContentLength64 = buffer.Length;
+                                await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
                             }
                         }
                         else
