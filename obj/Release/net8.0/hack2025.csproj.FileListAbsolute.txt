@@ -39,3 +39,4 @@ C:\Users\yimalison\.vscode\hack2025\obj\Release\net8.0\refint\hack2025.dll
 C:\Users\yimalison\.vscode\hack2025\obj\Release\net8.0\hack2025.pdb
 C:\Users\yimalison\.vscode\hack2025\obj\Release\net8.0\hack2025.genruntimeconfig.cache
 C:\Users\yimalison\.vscode\hack2025\obj\Release\net8.0\ref\hack2025.dll
+C:\Users\yimalison\.vscode\hack2025\bin\Release\net8.0\index.html

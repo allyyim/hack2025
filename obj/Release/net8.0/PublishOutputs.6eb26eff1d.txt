@@ -1,5 +1,6 @@
 C:\Users\yimalison\.vscode\hack2025\publish\hack2025.exe
 C:\Users\yimalison\.vscode\hack2025\publish\appsettings.json
+C:\Users\yimalison\.vscode\hack2025\publish\index.html
 C:\Users\yimalison\.vscode\hack2025\publish\hack2025.dll
 C:\Users\yimalison\.vscode\hack2025\publish\hack2025.deps.json
 C:\Users\yimalison\.vscode\hack2025\publish\hack2025.runtimeconfig.json
