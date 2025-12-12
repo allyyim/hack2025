@@ -254,13 +254,9 @@
                     if (progressResp.ok) {
                         const progress = await progressResp.json();
                         console.log('[FRONTEND POLL] Received from server:', progress);
-                        // Only update if we get real progress (not stale data)
-                        if (progress.total > 0 && progress.processed <= progress.total) {
-                            clientProgress = progress;
-                            console.log('[FRONTEND UPDATE] Updated clientProgress to:', clientProgress);
-                        } else {
-                            console.log('[FRONTEND] Keeping previous clientProgress (server sent invalid data):', clientProgress);
-                        }
+                        // Always update with server progress (trust the backend)
+                        clientProgress = progress;
+                        console.log('[FRONTEND UPDATE] Updated clientProgress to:', clientProgress);
                         const progressBar = document.getElementById('progressBar');
                         const progressText = document.getElementById('progressText');
                         if (progressBar && progressText) {
