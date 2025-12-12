@@ -237,14 +237,22 @@
                         console.log('Progress update:', progress);
                         const progressBar = document.getElementById('progressBar');
                         const progressText = document.getElementById('progressText');
-                        if (progressBar && progressText && progress.total > 0) {
-                            const percentage = Math.round((progress.processed / progress.total) * 100);
-                            progressBar.style.width = `${percentage}%`;
-                            progressBar.textContent = `${percentage}%`;
-                            if (progress.currentPR > 0) {
-                                progressText.textContent = `Analyzing PR #${progress.currentPR} (${progress.processed}/${progress.total} PRs, ${progress.found} with important comments)`;
-                            } else {
-                                progressText.textContent = `Initializing... (${progress.processed}/${progress.total} PRs)`;
+                        if (progressBar && progressText) {
+                            if (progress.total === -1) {
+                                // Fetching PRs phase
+                                progressBar.style.width = '100%';
+                                progressBar.textContent = '...';
+                                progressText.textContent = 'Fetching PRs from Azure DevOps...';
+                            } else if (progress.total > 0) {
+                                // Analyzing phase
+                                const percentage = Math.round((progress.processed / progress.total) * 100);
+                                progressBar.style.width = `${percentage}%`;
+                                progressBar.textContent = `${percentage}%`;
+                                if (progress.currentPR > 0) {
+                                    progressText.textContent = `Analyzing PR #${progress.currentPR} (${progress.processed}/${progress.total} PRs, ${progress.found} with important comments)`;
+                                } else {
+                                    progressText.textContent = `Initializing... (${progress.processed}/${progress.total} PRs)`;
+                                }
                             }
                         }
                     } else {

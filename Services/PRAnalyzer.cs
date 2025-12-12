@@ -54,6 +54,11 @@ public class PRAnalyzer
     {
         Console.WriteLine("Fetching Pull Request Comments...");
 
+        // Reset progress and indicate fetching phase
+        ProgressTracker.Reset();
+        ProgressTracker.TotalPRs = -1; // -1 indicates fetching in progress
+        Console.WriteLine($"[PROGRESS] Starting fetch phase...");
+
         // Fetch PR IDs
         var pullRequestIds = await _adoService.FetchPullRequestIdsAsync(daysBack, maxPRs);
 
@@ -70,8 +75,7 @@ public class PRAnalyzer
         Console.WriteLine($"PR IDs: {string.Join(", ", pullRequestIds.Select(id => $"#{id}"))}");
         Console.WriteLine("=====================================\n");
 
-        // Reset and initialize progress tracking
-        ProgressTracker.Reset();
+        // Initialize progress tracking with actual count
         ProgressTracker.TotalPRs = pullRequestIds.Count;
         Console.WriteLine($"[PROGRESS] Initialized: Total={ProgressTracker.TotalPRs}");
 
