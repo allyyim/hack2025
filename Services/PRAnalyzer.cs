@@ -70,6 +70,10 @@ public class PRAnalyzer
         Console.WriteLine($"PR IDs: {string.Join(", ", pullRequestIds.Select(id => $"#{id}"))}");
         Console.WriteLine("=====================================\n");
 
+        // Reset and initialize progress tracking
+        Program.ProgressTracker.Reset();
+        Program.ProgressTracker.TotalPRs = pullRequestIds.Count;
+
         // Process pull requests in batches
         int processedCount = 0;
         int foundCount = 0;
@@ -87,9 +91,13 @@ public class PRAnalyzer
                 foreach (var prResult in results)
                 {
                     processedCount++;
+                    Program.ProgressTracker.ProcessedPRs = processedCount;
+                    Program.ProgressTracker.CurrentPR = prResult.PullRequestId;
+                    
                     if (prResult.HasContent)
                     {
                         foundCount++;
+                        Program.ProgressTracker.FoundPRs = foundCount;
                         markdownWriter.WriteLine(prResult.Content);
                         Console.WriteLine($"✓ [PR #{prResult.PullRequestId}] Found important comments ({foundCount} found / {processedCount} analyzed)");
                     }

@@ -9,6 +9,16 @@ class Program
     static readonly ConcurrentDictionary<string, List<HttpListenerResponse>> Subscribers = new();
     static DateTime LastFetchTime = DateTime.MinValue;
     static readonly object FetchLock = new object();
+    
+    // Progress tracking
+    public static class ProgressTracker
+    {
+        public static int TotalPRs { get; set; }
+        public static int ProcessedPRs { get; set; }
+        public static int FoundPRs { get; set; }
+        public static int CurrentPR { get; set; }
+        public static void Reset() { TotalPRs = 0; ProcessedPRs = 0; FoundPRs = 0; CurrentPR = 0; }
+    }
 
     static async Task Main(string[] args)
     {
@@ -80,7 +90,17 @@ class Program
                 HttpListenerRequest request = context.Request;
                 HttpListenerResponse response = context.Response;
 
-                if (request.HttpMethod == "POST" && request.Url.AbsolutePath == "/api/fetch-comments")
+                if (request.HttpMethod == "GET" && request.Url.AbsolutePath == "/api/progress")
+                {
+                    // Return progress status as JSON
+                    var progressJson = $"{{\"total\":{ProgressTracker.TotalPRs},\"processed\":{ProgressTracker.ProcessedPRs},\"found\":{ProgressTracker.FoundPRs},\"currentPR\":{ProgressTracker.CurrentPR}}}";
+                    response.ContentType = "application/json";
+                    response.StatusCode = 200;
+                    byte[] buffer = Encoding.UTF8.GetBytes(progressJson);
+                    response.ContentLength64 = buffer.Length;
+                    await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                }
+                else if (request.HttpMethod == "POST" && request.Url.AbsolutePath == "/api/fetch-comments")
                 {
                     // Run the application
                     try
