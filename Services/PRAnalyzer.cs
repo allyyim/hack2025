@@ -119,8 +119,8 @@ public class PRAnalyzer
                 // Log progress update explicitly
                 Console.WriteLine($"[PROGRESS UPDATE] Backend now at: {processedCount}/{ProgressTracker.TotalPRs} PRs (Found: {foundCount})");
                 
-                // Delay to ensure frontend polling catches each incremental update
-                await Task.Delay(1000);
+                // Longer delay so frontend polling (300ms) catches EVERY update
+                await Task.Delay(2000);
             }
         }
 
