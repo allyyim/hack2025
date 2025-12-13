@@ -247,6 +247,8 @@
             // Immediately reset progress to 0 on the client side
             let clientProgress = { total: 15, processed: 0, found: 0, currentPR: 0 };
 
+            console.log('[FRONTEND] Starting progress polling NOW');
+            
             // Poll for progress updates
             const progressInterval = setInterval(async () => {
                 try {
@@ -313,6 +315,7 @@
             try {
                 // Use relative URL so it works both locally and on Azure
                 // Add timestamp to force fresh analysis
+                console.log('[FRONTEND] Calling /important-comments endpoint NOW');
                 const response = await fetch(`/important-comments?force=true&t=${Date.now()}`);
                 
                 // Clear interval and keep progress bar visible

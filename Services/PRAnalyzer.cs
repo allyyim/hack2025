@@ -95,15 +95,17 @@ public class PRAnalyzer
 
         using (StreamWriter markdownWriter = new StreamWriter(_outputPath, append: true))
         {
-            foreach (var prId in pullRequestIds)
+            for (int i = 0; i < pullRequestIds.Count; i++)
             {
-                // Delay BEFORE processing so frontend can see current state
-                if (processedCount > 0)
-                {
-                    await Task.Delay(2000);
-                }
+                var prId = pullRequestIds[i];
                 
-                // Process single PR
+                // Update progress FIRST to show we're about to process this PR
+                Console.WriteLine($"[PROGRESS] About to process PR #{prId} ({i + 1}/{pullRequestIds.Count})");
+                
+                // Wait 2 seconds so frontend can poll and see current state
+                await Task.Delay(2000);
+                
+                // NOW process the PR
                 var prResult = await ProcessPRAsync(prId);
                 
                 processedCount++;
