@@ -236,8 +236,8 @@
             status.innerHTML = `
                 <div id="progressContainer" style="display:flex;flex-direction:column;gap:10px;width:100%;">
                     <span class="loading-spinner"></span>
-                    <div style="font-weight:500;">Analyzing up to 15 PRs from the last 30 days...</div>
-                    <div class="progress-3" id="progressBar">0/15</div>
+                    <div style="font-weight:500;">Analyzing up to 20 PRs from the last 30 days...</div>
+                    <div class="progress-3" id="progressBar">0/20</div>
                     <div id="progressText" style="font-size:14px;color:#666;font-weight:500;">Preparing to analyze PRs...</div>
                 </div>
             `;
@@ -245,7 +245,7 @@
             console.log('Progress bar initialized');
 
             // Immediately reset progress to 0 on the client side
-            let clientProgress = { total: 15, processed: 0, found: 0, currentPR: 0 };
+            let clientProgress = { total: 20, processed: 0, found: 0, currentPR: 0 };
 
             console.log('[FRONTEND] Starting progress polling NOW');
             

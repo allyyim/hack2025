@@ -85,8 +85,8 @@ public class PRAnalyzer
         ProgressTracker.ProcessedPRs = 0;
         Console.WriteLine($"[PROGRESS] Initialized: Total={ProgressTracker.TotalPRs}, Processed=0");
         
-        // Wait 3 seconds to ensure UI polling catches the initial 0/15 state
-        await Task.Delay(3000);
+        // Brief delay to ensure UI polling catches initial state
+        await Task.Delay(1000);
         Console.WriteLine($"[PROGRESS] Starting PR processing...");
 
         // Process pull requests ONE AT A TIME for smooth progress updates
@@ -99,13 +99,7 @@ public class PRAnalyzer
             {
                 var prId = pullRequestIds[i];
                 
-                // Update progress FIRST to show we're about to process this PR
-                Console.WriteLine($"[PROGRESS] About to process PR #{prId} ({i + 1}/{pullRequestIds.Count})");
-                
-                // Wait 2 seconds so frontend can poll and see current state
-                await Task.Delay(2000);
-                
-                // NOW process the PR
+                // Process PR (OpenAI analysis provides natural delay)
                 var prResult = await ProcessPRAsync(prId);
                 
                 processedCount++;
