@@ -250,7 +250,17 @@
             // Poll for progress updates
             const progressInterval = setInterval(async () => {
                 try {
-                    const progressResp = await fetch('/api/progress?' + Date.now());
+                    // Aggressive cache busting with multiple techniques
+                    const timestamp = Date.now();
+                    const random = Math.random();
+                    const progressResp = await fetch(`/api/progress?t=${timestamp}&r=${random}`, {
+                        cache: 'no-store',
+                        headers: {
+                            'Cache-Control': 'no-cache, no-store, must-revalidate',
+                            'Pragma': 'no-cache',
+                            'Expires': '0'
+                        }
+                    });
                     if (progressResp.ok) {
                         const progress = await progressResp.json();
                         console.log('[FRONTEND POLL] Received from server:', progress);
