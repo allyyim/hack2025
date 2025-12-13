@@ -259,34 +259,38 @@
                         console.log('[FRONTEND UPDATE] Updated clientProgress to:', clientProgress);
                         const progressBar = document.getElementById('progressBar');
                         const progressText = document.getElementById('progressText');
-                        if (progressBar && progressText) {
-                            if (clientProgress.total === -1) {
-                                // Fetching PRs phase
-                                progressBar.style.width = '100%';
-                                progressBar.textContent = '...';
-                                progressText.textContent = 'Fetching PRs from Azure DevOps...';
-                                console.log('[FRONTEND RENDER] Fetching phase active');
-                            } else if (clientProgress.total > 0) {
-                                // Analyzing phase
-                                const percentage = Math.round((clientProgress.processed / clientProgress.total) * 100);
-                                // Set background-size for both gradients (colored stripe, gray stripe)
-                                progressBar.style.backgroundSize = `${percentage}%, 100%`;
-                                progressBar.textContent = `${clientProgress.processed}/${clientProgress.total}`;
-                                console.log(`[FRONTEND RENDER] Updated progressBar: ${clientProgress.processed}/${clientProgress.total} (${percentage}%) - backgroundSize: ${percentage}%`);
-                                
-                                // Update text immediately even if no PRs processed yet
-                                if (clientProgress.processed === 0) {
-                                    progressText.textContent = `Starting analysis of ${clientProgress.total} PRs...`;
-                                } else if (clientProgress.currentPR > 0) {
-                                    progressText.textContent = `Parsed ${clientProgress.processed} out of ${clientProgress.total} PRs • ${clientProgress.found} with important comments • Currently: PR #${clientProgress.currentPR}`;
-                                } else {
-                                    progressText.textContent = `Parsed ${clientProgress.processed} out of ${clientProgress.total} PRs • ${clientProgress.found} with important comments`;
-                                }
+                        
+                        // If elements don't exist anymore, stop polling
+                        if (!progressBar || !progressText) {
+                            console.log('[FRONTEND] Progress elements removed, stopping polling');
+                            clearInterval(progressInterval);
+                            return;
+                        }
+                        
+                        if (clientProgress.total === -1) {
+                            // Fetching PRs phase
+                            progressBar.style.width = '100%';
+                            progressBar.textContent = '...';
+                            progressText.textContent = 'Fetching PRs from Azure DevOps...';
+                            console.log('[FRONTEND RENDER] Fetching phase active');
+                        } else if (clientProgress.total > 0) {
+                            // Analyzing phase
+                            const percentage = Math.round((clientProgress.processed / clientProgress.total) * 100);
+                            // Set background-size for both gradients (colored stripe, gray stripe)
+                            progressBar.style.backgroundSize = `${percentage}%, 100%`;
+                            progressBar.textContent = `${clientProgress.processed}/${clientProgress.total}`;
+                            console.log(`[FRONTEND RENDER] Updated progressBar: ${clientProgress.processed}/${clientProgress.total} (${percentage}%) - backgroundSize: ${percentage}%`);
+                            
+                            // Update text immediately even if no PRs processed yet
+                            if (clientProgress.processed === 0) {
+                                progressText.textContent = `Starting analysis of ${clientProgress.total} PRs...`;
+                            } else if (clientProgress.currentPR > 0) {
+                                progressText.textContent = `Parsed ${clientProgress.processed} out of ${clientProgress.total} PRs • ${clientProgress.found} with important comments • Currently: PR #${clientProgress.currentPR}`;
                             } else {
-                                console.log('[FRONTEND RENDER] Waiting for progress data...', clientProgress);
+                                progressText.textContent = `Parsed ${clientProgress.processed} out of ${clientProgress.total} PRs • ${clientProgress.found} with important comments`;
                             }
                         } else {
-                            console.error('[FRONTEND RENDER] Progress elements not found!', {progressBar, progressText});
+                            console.log('[FRONTEND RENDER] Waiting for progress data...', clientProgress);
                         }
                     } else {
                         console.warn('Progress endpoint returned:', progressResp.status);
