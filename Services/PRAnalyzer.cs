@@ -99,6 +99,12 @@ public class PRAnalyzer
             {
                 var prId = pullRequestIds[i];
                 
+                // Small delay before processing to allow frontend polling to catch updates
+                if (i > 0)
+                {
+                    await Task.Delay(750);
+                }
+                
                 // Process PR (OpenAI analysis provides natural delay)
                 var prResult = await ProcessPRAsync(prId);
                 
