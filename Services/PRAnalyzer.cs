@@ -85,8 +85,8 @@ public class PRAnalyzer
         ProgressTracker.ProcessedPRs = 0;
         Console.WriteLine($"[PROGRESS] Initialized: Total={ProgressTracker.TotalPRs}, Processed=0");
         
-        // Brief delay to ensure UI polling catches the initial state
-        await Task.Delay(500);
+        // Wait 3 seconds to ensure UI polling catches the initial 0/15 state
+        await Task.Delay(3000);
         Console.WriteLine($"[PROGRESS] Starting PR processing...");
 
         // Process pull requests ONE AT A TIME for smooth progress updates
@@ -119,8 +119,8 @@ public class PRAnalyzer
                 // Log progress update explicitly
                 Console.WriteLine($"[PROGRESS UPDATE] Backend now at: {processedCount}/{ProgressTracker.TotalPRs} PRs (Found: {foundCount})");
                 
-                // Small delay to ensure frontend polling catches each update (polling is every 300ms)
-                await Task.Delay(400);
+                // Delay to ensure frontend polling catches each incremental update
+                await Task.Delay(1000);
             }
         }
 
