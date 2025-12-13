@@ -97,6 +97,12 @@ public class PRAnalyzer
         {
             foreach (var prId in pullRequestIds)
             {
+                // Delay BEFORE processing so frontend can see current state
+                if (processedCount > 0)
+                {
+                    await Task.Delay(2000);
+                }
+                
                 // Process single PR
                 var prResult = await ProcessPRAsync(prId);
                 
@@ -118,9 +124,6 @@ public class PRAnalyzer
                 
                 // Log progress update explicitly
                 Console.WriteLine($"[PROGRESS UPDATE] Backend now at: {processedCount}/{ProgressTracker.TotalPRs} PRs (Found: {foundCount})");
-                
-                // Longer delay so frontend polling (300ms) catches EVERY update
-                await Task.Delay(2000);
             }
         }
 
