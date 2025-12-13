@@ -61,7 +61,7 @@ class Program
     {
         string importantCommentsMarkdownPath = Path.Combine(AppContext.BaseDirectory, "important_comments.md");
         var analyzer = new PRAnalyzer(importantCommentsMarkdownPath);
-        await analyzer.AnalyzePullRequestsAsync(daysBack: 30, maxPRs: 20);
+        await analyzer.AnalyzePullRequestsAsync(daysBack: 30, maxPRs: 12);
     }
 
     static async Task FetchOnce()
