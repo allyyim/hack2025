@@ -147,6 +147,10 @@ class Program
                 }
                     else if (request.HttpMethod == "GET" && request.Url.AbsolutePath == "/important-comments")
                     {
+                        // RESET PROGRESS TRACKER IMMEDIATELY so first poll sees 0/0
+                        ProgressTracker.Reset();
+                        Console.WriteLine("[PROGRESS] Reset to 0/0 at start of /important-comments");
+                        
                         // Serve the important_comments.md from the same directory
                         string mdPath = Path.Combine(AppContext.BaseDirectory, "important_comments.md");
                         response.ContentType = "text/html";
