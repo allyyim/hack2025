@@ -249,8 +249,8 @@
 
             console.log('[FRONTEND] Starting progress polling NOW (immediately)');
             
-            // Poll for progress updates - START BEFORE backend call
-            const progressInterval = setInterval(async () => {
+            // Define the polling function
+            const pollProgress = async () => {
                 try {
                     // Aggressive cache busting with multiple techniques
                     const timestamp = Date.now();
@@ -310,7 +310,13 @@
                 } catch (e) {
                     console.error('Progress polling error:', e);
                 }
-            }, 300);
+            };
+            
+            // Poll IMMEDIATELY once before starting interval
+            await pollProgress();
+            
+            // Then poll every 300ms - START BEFORE backend call
+            const progressInterval = setInterval(pollProgress, 300);
 
             try {
                 // Start backend processing AFTER polling has started
