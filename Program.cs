@@ -151,51 +151,34 @@ class Program
                         string mdPath = Path.Combine(AppContext.BaseDirectory, "important_comments.md");
                         response.ContentType = "text/html";
 
-                        // Only fetch if we haven't fetched in the last 30 seconds (debounce)
-                        // OR if force=true query parameter is present
-                        bool shouldFetch = false;
-                        bool forceRefresh = request.QueryString["force"] == "true";
-                        
-                        lock (FetchLock)
+                        // Always fetch fresh data (removed debounce for better progress visibility)
+                        // Delete old file to ensure fresh data
+                        if (File.Exists(mdPath))
                         {
-                            if (forceRefresh || DateTime.UtcNow.Subtract(LastFetchTime).TotalSeconds >= 30)
-                            {
-                                LastFetchTime = DateTime.UtcNow;
-                                shouldFetch = true;
-                            }
+                            File.Delete(mdPath);
                         }
                         
-                        if (shouldFetch)
+                        // Start fetch and wait for completion
+                        try
                         {
-                            
-                            // Delete old file to ensure fresh data
-                            if (File.Exists(mdPath))
-                            {
-                                File.Delete(mdPath);
-                            }
-                            
-                            // Start fetch and wait for completion
-                            try
-                            {
-                                await FetchOnce();
-                            }
+                            await FetchOnce();
+                        }
                             catch (Exception ex)
                             {
-                                Console.WriteLine($"[ERROR] FetchOnce failed: {ex.GetType().Name}: {ex.Message}");
-                                if (ex.InnerException != null)
-                                {
-                                    Console.WriteLine($"[ERROR] Inner exception: {ex.InnerException.Message}");
-                                }
-                                Console.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
-                                
-                                string errorHtml = $"<!doctype html><html><head><meta charset=\"utf-8\"><title>Error</title></head><body style=\"font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;padding:20px;\"><h2>Error fetching comments</h2><p><strong>Error:</strong> {System.Net.WebUtility.HtmlEncode(ex.Message)}</p><p><strong>Type:</strong> {System.Net.WebUtility.HtmlEncode(ex.GetType().Name)}</p><p>Check application logs in Azure Portal for more details.</p></body></html>";
-                                response.StatusCode = 500;
-                                byte[] errorBuffer = Encoding.UTF8.GetBytes(errorHtml);
-                                response.ContentLength64 = errorBuffer.Length;
-                                await response.OutputStream.WriteAsync(errorBuffer, 0, errorBuffer.Length);
-                                response.Close();
-                                continue;
+                            Console.WriteLine($"[ERROR] FetchOnce failed: {ex.GetType().Name}: {ex.Message}");
+                            if (ex.InnerException != null)
+                            {
+                                Console.WriteLine($"[ERROR] Inner exception: {ex.InnerException.Message}");
                             }
+                            Console.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
+                            
+                            string errorHtml = $"<!doctype html><html><head><meta charset=\"utf-8\"><title>Error</title></head><body style=\"font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;padding:20px;\"><h2>Error fetching comments</h2><p><strong>Error:</strong> {System.Net.WebUtility.HtmlEncode(ex.Message)}</p><p><strong>Type:</strong> {System.Net.WebUtility.HtmlEncode(ex.GetType().Name)}</p><p>Check application logs in Azure Portal for more details.</p></body></html>";
+                            response.StatusCode = 500;
+                            byte[] errorBuffer = Encoding.UTF8.GetBytes(errorHtml);
+                            response.ContentLength64 = errorBuffer.Length;
+                            await response.OutputStream.WriteAsync(errorBuffer, 0, errorBuffer.Length);
+                            response.Close();
+                            continue;
                         }
 
                         if (File.Exists(mdPath))
