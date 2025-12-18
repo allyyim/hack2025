@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("hack2025")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ef268da1e09b8f75eaf79ead019287e396699320")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+fff97528a8b8bd6a0c4bc26908202436922bfbaf")]
 [assembly: System.Reflection.AssemblyProductAttribute("hack2025")]
 [assembly: System.Reflection.AssemblyTitleAttribute("hack2025")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
